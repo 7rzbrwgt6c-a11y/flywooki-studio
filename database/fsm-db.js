@@ -17,16 +17,19 @@ export function openDB() {
           keyPath: "id",
           autoIncrement: true
         });
+
         store.createIndex("cnId", "cnId", { unique: true });
         store.createIndex("categoryId", "categoryId");
         store.createIndex("name", "name");
       }
 
       if (!db.objectStoreNames.contains("categories")) {
-        db.createObjectStore("categories", {
+        const store = db.createObjectStore("categories", {
           keyPath: "id",
           autoIncrement: true
         });
+
+        store.createIndex("name", "name", { unique: true });
       }
 
       if (!db.objectStoreNames.contains("stock_movements")) {
@@ -34,20 +37,27 @@ export function openDB() {
           keyPath: "id",
           autoIncrement: true
         });
+
         store.createIndex("cnId", "cnId");
         store.createIndex("date", "date");
+        store.createIndex("type", "type");
       }
 
       if (!db.objectStoreNames.contains("settings")) {
-        db.createObjectStore("settings", {
-          keyPath: "id",
-          autoIncrement: true
+        const store = db.createObjectStore("settings", {
+          keyPath: "key"
         });
       }
     };
 
     request.onsuccess = () => {
       dbInstance = request.result;
+
+      dbInstance.onversionchange = () => {
+        dbInstance.close();
+        dbInstance = null;
+      };
+
       resolve(dbInstance);
     };
 
