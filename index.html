@@ -20,6 +20,14 @@
  .search{max-width:none;width:100%}.filters{display:grid;grid-template-columns:1fr}
 }
 @media(max-width:380px){.brand img{width:62vw}.grid{gap:7px}.metric{padding:9px}.tabs button{font-size:12px}.metric .value{font-size:18px}}
+
+/* Flywooki Studio Dark Orange theme */
+:root{--bg:#0b0d10;--card:#15191e;--ink:#f2f4f6;--muted:#9ba4ad;--line:#2a3037;--accent:#ff7900;--green:#42c878;--red:#ff6262;--gold:#ffb020;color-scheme:dark}
+body{background:var(--bg);color:var(--ink)}header{background:#050607;border-bottom:3px solid #ff7900} .tabs button{background:#20262d;color:#d9dfe5}.tabs button.active{background:#ff7900;color:#101010}
+button{background:#ff7900;color:#111}button.secondary{background:#252c33;color:#f2f4f6;border:1px solid #353e47}button.danger{background:#532626;color:#ffdada}button:disabled{opacity:.45}
+.metric,.panel{background:var(--card);border-color:var(--line)}th,td{border-bottom-color:var(--line)}th,label,.tag{color:var(--muted)}input,select,textarea{background:#0f1317;color:var(--ink);border-color:#343c44}input::placeholder,textarea::placeholder{color:#78828b} .dialog{background:#15191e;color:var(--ink);border:1px solid #343c44}.dialog footer{background:#15191e}.notice{background:#20262d;color:#dce2e8}.empty{color:var(--muted)}.pill{background:#252c33;color:#e5e9ed}.pill.open{background:#163d2a;color:#9ce5b9}.pill.closed{background:#252c33;color:#c0c6cc}.pill.low{background:#493716;color:#ffd27b}.brandline{background:#343c44}.footer{color:var(--muted)}
+.modal{background:#000b}
+
 </style></head><body>
 <header><div class="brand"><img src="logo-flywooki.png" alt="Flywooki Studio"><div><small>Filament management · v0.3 PWA</small></div></div><div class="head-actions"><button class="secondary" id="exportBtn">Eksport kopii</button><button class="secondary" id="importBtn">Import kopii</button><button class="secondary" id="installHelpBtn">Instalacja PWA</button><input id="fileInput" type="file" accept="application/json" class="hide"></div></header>
 <div class="wrap"><nav class="tabs"><button class="active" data-tab="dashboard">Dashboard</button><button data-tab="spools">Szpule</button><button data-tab="invoices">Faktury</button><button data-tab="sales">Rozchód zewn.</button><button data-tab="catalog">Katalog</button><button data-tab="history">Historia</button></nav><main id="app"></main><div class="footer">FLYWOOKI STUDIO · PROTOTYP 0.2 · Dane pozostają lokalnie w tej przeglądarce. To nie jest jeszcze synchronizowana baza online.</div></div><div id="modalRoot"></div>
