@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "database": "FlywookiStudio",
+  "stores": {
+    "inventory": "++id, cnId, name, categoryId, updatedAt",
+    "categories": "++id, name",
+    "stock_movements": "++id, cnId, type, date",
+    "settings": "++id, key"
+  }
+}
