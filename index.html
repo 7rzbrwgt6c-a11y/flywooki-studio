@@ -934,7 +934,50 @@ async function syncInventoryHistory(ctx,remoteProducts,localStockAtStart){
   stockRows.push({id:opId,product_id:remoteProduct.id,operation_type:operationType,quantity_change:qty,unit_price:operationType==='sale'?(Number(localProduct?.retailPrice)||null):(Number(localProduct?.unitCost)||null),reference_id:null,notes:(action+' · '+String(h.note||'')).slice(0,500),client_operation_id:opId,created_at:h.date||new Date().toISOString()});
  }
  if(idsChanged)localStorage.setItem(KEY,JSON.stringify(data));
- if(stockRows.length)await ctx.postRows('stock_operations',stockRows,true);
+ // Odczyt już zapisanych operacji pozwala nie dublować ruchów i wykryć produkty,
+ // które mają już dziennik stanów w chmurze.
+ const remoteOps=await ctx.getAll('stock_operations?select=id,client_operation_id,product_id,quantity_change','Odczyt istniejącego dziennika magazynowego');
+ const knownIds=new Set();const productsWithLedger=new Set();
+ for(const op of remoteOps){if(op.id)knownIds.add(String(op.id));if(op.client_operation_id)knownIds.add(String(op.client_operation_id));if(op.product_id)productsWithLedger.add(String(op.product_id));}
+ const pending=stockRows.filter(op=>!knownIds.has(String(op.client_operation_id||op.id)));
+ const pendingNet=new Map();for(const op of pending)pendingNet.set(String(op.product_id),(pendingNet.get(String(op.product_id))||0)+(Number(op.quantity_change)||0));
+ // Starsze instalacje mogły mieć stan wpisany ręcznie bez odpowiadającego mu ruchu.
+ // Uzupełniamy wyłącznie produkty, które nie mają jeszcze żadnego dziennika w chmurze.
+ // Bazę wyliczamy przed oczekującymi operacjami, aby nie policzyć ich drugi raz.
+ const ownerId=await cloudOwnerId(ctx);
+ const balance=await ctx.getAll('stock_balance?select=product_id,stock_quantity&owner_id=eq.'+encodeURIComponent(ownerId),'Odczyt stanu przed importem historii');
+ const cloudQty=new Map(balance.map(row=>[String(row.product_id),Number(row.stock_quantity)||0]));
+ const bootstrap=[];
+ for(const p of data.products){
+  const rp=remoteById.get(String(p.id))||remoteByCn.get(String(p.cnId||''));if(!rp||productsWithLedger.has(String(rp.id)))continue;
+  const current=Number(p.stock)||0,unsynced=pendingNet.get(String(rp.id))||0,opening=current-unsynced,remote=cloudQty.get(String(rp.id))||0,delta=opening-remote;
+  if(delta<=0.00001)continue;
+  if(!Number.isInteger(delta))throw new Error('Stan początkowy produktu '+p.name+' wynosi '+delta+' szt. Supabase wymaga całkowitych ilości.');
+  const id=await stableCloudUuid('fsm-stock-bootstrap-v2|'+rp.id);
+  bootstrap.push({id,product_id:rp.id,operation_type:'correction',quantity_change:delta,unit_price:null,reference_id:null,notes:'FSM · bezpieczne przeniesienie stanu początkowego bez wcześniejszego dziennika',client_operation_id:id});
+ }
+ for(const op of bootstrap){
+  try{await ctx.postRows('stock_operations',[op],true);}
+  catch(e){const rp=remoteById.get(String(op.product_id));throw new Error('Nie udało się przenieść stanu początkowego produktu '+String(rp?.name||op.product_id)+' ('+op.quantity_change+' szt.). '+e.message);}
+ }
+ // Historia lokalna jest prezentowana od najnowszej, lecz w pierwszym imporcie
+ // trzeba przesłać ją chronologicznie, aby przyjęcie poprzedziło późniejszy rozchód.
+ pending.sort((a,b)=>{
+  const ta=Date.parse(a.created_at||'')||0,tb=Date.parse(b.created_at||'')||0;
+  if(ta!==tb)return ta-tb;
+  const qa=Number(a.quantity_change)||0,qb=Number(b.quantity_change)||0;
+  if((qa>=0)!==(qb>=0))return qa>=0?-1:1;
+  return String(a.id).localeCompare(String(b.id));
+ });
+ // Zapis pojedynczo: blokada stanów widzi zatwierdzoną operację poprzedzającą.
+ // Identyfikatory są deterministyczne, więc ponowienie nie powiela udanych wpisów.
+ for(const op of pending){
+  try{await ctx.postRows('stock_operations',[op],true);}
+  catch(e){
+   const rp=remoteById.get(String(op.product_id)),sign=Number(op.quantity_change)>0?'+':'';
+   throw new Error('Nie udało się zapisać operacji „'+String(op.notes||'operacja magazynowa')+'” dla '+String(rp?.name||op.product_id)+' (zmiana '+sign+String(op.quantity_change)+' szt., data '+String(op.created_at||'brak')+'). '+e.message);
+  }
+ }
  if(historyRows.length)await ctx.postRows('operation_history',historyRows,true);
  const remoteHistory=await ctx.getAll('operation_history?select=id,entity_type,entity_id,action,details,created_at&order=created_at.asc','Odczyt historii operacji');
  const known=new Set(data.history.map(h=>String(h.id)));let pulled=0;
@@ -942,21 +985,14 @@ async function syncInventoryHistory(ctx,remoteProducts,localStockAtStart){
   data.history.push({id:row.id,date:row.created_at||new Date().toISOString(),action:row.action||'Operacja',productName:details.productName||'—',cnId:details.cnId||'—',qty:Number(details.qty)||0,note:details.note||''});known.add(String(row.id));pulled++;
  }
  data.history.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
- return{pushed:stockRows.length,pulledHistory:pulled};
+ return{pushed:pending.length+bootstrap.length,pulledHistory:pulled,bootstrap:bootstrap.length};
 }
 async function syncStockBalance(ctx,remoteProducts,localStockAtStart){
  const ownerId=await cloudOwnerId(ctx),balance=await ctx.getAll('stock_balance?select=owner_id,product_id,stock_quantity&owner_id=eq.'+encodeURIComponent(ownerId),'Odczyt aktualnych stanów magazynowych');
- const quantityByProduct=new Map(balance.map(r=>[String(r.product_id),Number(r.stock_quantity)||0]));
+ const finalByProduct=new Map(balance.map(r=>[String(r.product_id),Number(r.stock_quantity)||0]));
  const remoteByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[String(p.cn_code),p])),remoteById=new Map(remoteProducts.map(p=>[String(p.id),p]));
- const bootstrap=[];
- // Jednorazowe, dodatnie uzgodnienie starych lokalnych stanów, których nie opisuje jeszcze żaden dziennik.
- // Nie obniżamy chmury na podstawie starej kopii z telefonu.
- for(const p of data.products){const before=localStockAtStart.get(String(p.cnId||''));if(before===undefined||before<=0)continue;const rp=remoteById.get(String(p.id))||remoteByCn.get(String(p.cnId||''));if(!rp)continue;const cloudQty=quantityByProduct.get(String(rp.id))||0,delta=before-cloudQty;if(delta<=0.00001)continue;if(!Number.isInteger(delta))throw new Error('Stan lokalny produktu '+p.name+' wynosi '+before+' szt., a Supabase wymaga całkowitych ilości. Nie wykonano automatycznego uzgodnienia.');const id=await stableCloudUuid('fsm-stock-bootstrap-v1|'+rp.id);bootstrap.push({id,product_id:rp.id,operation_type:'correction',quantity_change:delta,unit_price:null,reference_id:null,notes:'FSM · jednorazowe uzgodnienie stanu istniejącego przed synchronizacją dwukierunkową',client_operation_id:id});}
- if(bootstrap.length)await ctx.postRows('stock_operations',bootstrap,true);
- const finalBalance=bootstrap.length?await ctx.getAll('stock_balance?select=owner_id,product_id,stock_quantity&owner_id=eq.'+encodeURIComponent(ownerId),'Ponowny odczyt stanów magazynowych'):balance;
- const finalByProduct=new Map(finalBalance.map(r=>[String(r.product_id),Number(r.stock_quantity)||0]));
  for(const p of data.products){const rp=remoteById.get(String(p.id))||remoteByCn.get(String(p.cnId||''));if(!rp)continue;p.stock=finalByProduct.get(String(rp.id))||0;}
- return{products:data.products.length,stockRows:finalBalance.length,baselineCorrections:bootstrap.length};
+ return{products:data.products.length,stockRows:balance.length};
 }
 async function syncAllToCloud({automatic=false}={}){
  if(syncInProgress)return false;
@@ -978,8 +1014,8 @@ async function syncAllToCloud({automatic=false}={}){
  }
  const allOk=catalogOk&&supplierOk&&purchaseOk&&expenseOk&&imageOk&&historyOk&&stockOk;
  if(allOk){const stamp=new Date().toLocaleTimeString('pl-PL');if(status)status.textContent='Synchronizacja zakończona · katalog, zdjęcia, magazyn, zakupy i koszty · '+stamp;if(detail)detail.textContent='Konto: '+(oauthStore.getItem('fsm_sb_user_label')||'GitHub')+' · katalog + zdjęcia + magazyn + zakupy + koszty · auto-sync 10 s';data.sync.lastSync=new Date().toISOString();data.sync.status='synced';save();}
- else{const message=error?.message||'Nie udało się zsynchronizować wszystkich danych.';if(status)status.textContent='Synchronizacja częściowa / błąd: '+message;if(detail)detail.textContent='Sprawdź konfigurację Supabase Storage i ponów synchronizację.';localStorage.setItem(KEY,JSON.stringify(data));if(!automatic)alert('Synchronizacja nie została w pełni zakończona.\n'+message+'\n\nDane lokalne pozostają zachowane.');}
- if(btn){btn.disabled=false;btn.textContent='Synchronizuj teraz'}syncInProgress=false;resetAutoSyncClock();
+ else{const message=error?.message||'Nie udało się zsynchronizować wszystkich danych.';if(status)status.textContent='Synchronizacja częściowa / błąd: '+message;if(detail)detail.textContent='Sprawdź szczegóły błędu synchronizacji. Dane lokalne zostały zachowane.';localStorage.setItem(KEY,JSON.stringify(data));if(!automatic)alert('Synchronizacja nie została w pełni zakończona.\n'+message+'\n\nDane lokalne pozostają zachowane.');}
+ if(btn){btn.disabled=false;btn.textContent='Synchronizuj teraz'}syncInProgress=false;resetAutoSyncClock();if(!allOk)nextAutoSyncAt=Date.now()+60000;
  return allOk;
 }
 // Wspolny licznik i auto-sync: pasek odlicza do kolejnej synchronizacji co 10 sekund.
