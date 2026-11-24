@@ -211,6 +211,7 @@ input,select,textarea{border-radius:0!important;background:#07121a!important;bor
         <p id="syncCloudDetail"></p>
         <div class="sidebar-sync-actions">
           <button id="syncCatalogBtn" class="hide">Synchronizuj katalog</button>
+          <button id="syncExpensesBtn" class="hide">Synchronizuj koszty</button>
           <button id="syncDisconnect" class="secondary hide">Wyloguj</button>
         </div>
       </div>
@@ -365,7 +366,7 @@ function operationForm(id,kind='adjustment'){let p=data.products.find(q=>q.id===
 function saleChoiceForm(){let available=data.products.filter(p=>p.stock>0);if(!available.length)return;modal('Wybierz produkt do sprzedaży',`<form id="saleChoice"><label>Produkt *</label><select name="product" required>${available.map(p=>`<option value="${p.id}">${esc(p.name)} · ${esc(p.cnId)} · stan ${fmt(p.stock)}</option>`).join('')}</select></form>`,()=>{let id=document.getElementById('saleChoice').elements.product.value;closeModal();operationForm(id,'sale')})}
 function invoiceForm(){let row=()=>`<tr><td><input name="cn" placeholder="ID CN" required></td><td><input name="name" placeholder="Nazwa" required></td><td><select name="category">${data.categories.map(c=>`<option value="${esc(c)}" ${c==='PLA'?'selected':''}>${esc(c)}</option>`).join('')}</select></td><td><input name="color" placeholder="Kolor"></td><td><input name="qty" type="number" step=".01" min=".01" value="1" required></td><td><input name="weight" type="number" min="1" value="1000"></td><td><input name="cost" type="number" min="0" step=".01" value="0"></td><td><input name="retail" type="number" min="0" step=".01" value="0"></td><td><input name="photo" type="file" accept="image/*"></td><td><button type="button" class="danger removeRow">×</button></td></tr>`;let body=`${supplierListMarkup()}<form id="invoiceForm"><div class="formgrid"><div><label>Kontrahent / dostawca *</label><input name="supplier" list="supplierSuggestions" autocomplete="off" required placeholder="Wpisz lub wybierz kontrahenta"></div><div><label>NIP</label><input name="nip" autocomplete="off"></div><div><label>Numer dokumentu *</label><input name="number" required></div><div><label>Data zakupu</label><input name="date" type="date" value="${dateNow()}"></div><div><label>Koszt dostawy</label><input name="shipping" type="number" min="0" step=".01" value="0"></div><div class="field full"><label>Uwagi</label><textarea name="notes"></textarea></div></div><div class="split"><h3>Pozycje zakupu</h3><button type="button" class="secondary" id="addLine">+ Pozycja</button></div><div class="table-wrap"><table><thead><tr><th>CN</th><th>Nazwa</th><th>Materiał</th><th>Kolor</th><th>Ilość</th><th>Masa/szt. (g)</th><th>Koszt/szt.</th><th>Detal/szt.</th><th>Zdjęcie</th><th></th></tr></thead><tbody id="rows">${row()}</tbody></table></div></form>`;modal('Rejestruj zakup',body,()=>{let f=document.getElementById('invoiceForm');if(!f.reportValidity())return;let x=new FormData(f),rows=[...document.querySelectorAll('#rows tr')].map(tr=>{let v=n=>tr.querySelector(`[name=${n}]`).value;return{cn:v('cn').trim(),name:v('name').trim(),category:v('category')||'Inny',color:v('color'),qty:+v('qty'),weight:+v('weight'),cost:+v('cost'),retail:+v('retail'),photoFile:tr.querySelector('[name=photo]').files[0]||null}});if(rows.some(r=>r.qty<=0||!r.cn||!r.name))return alert('Sprawdź pozycje.');if(rows.some(r=>r.photoFile&&r.photoFile.size>1500000))return alert('Zdjęcie w pozycji zakupu przekracza limit 1,5 MB.');Promise.all(rows.map(r=>r.photoFile?new Promise(resolve=>{let rd=new FileReader();rd.onload=()=>{r.image=rd.result;resolve()};rd.readAsDataURL(r.photoFile)}):Promise.resolve())).then(()=>{let supplierName=x.get('supplier').trim(),supplier=upsertSupplier(supplierName,x.get('nip'));let invoice={id:crypto.randomUUID(),supplierName,nip:x.get('nip').trim(),number:x.get('number'),purchaseDate:x.get('date'),items:rows,shipping:+x.get('shipping')||0,notes:x.get('notes'),grossTotal:rows.reduce((sum,r)=>sum+r.qty*r.cost,0)+(+x.get('shipping')||0),created:new Date().toISOString()};data.invoices.push(invoice);rows.forEach(r=>{delete r.photoFile;let p=data.products.find(p=>p.cnId===r.cn);if(!p){p={id:crypto.randomUUID(),cnId:r.cn,name:r.name,brand:supplierName,category:r.category,color:r.color||'Nie określono',unitWeight:r.weight,unitCost:r.cost,retailPrice:r.retail,image:r.image||'',stock:0,lowThreshold:1,createdAt:new Date().toISOString()};data.products.push(p)}else{p.name=r.name;p.category=r.category;p.color=r.color;p.unitWeight=r.weight;if(r.cost)p.unitCost=r.cost;if(r.retail)p.retailPrice=r.retail;if(r.image)p.image=r.image}p.stock+=r.qty;addHistory('Przyjęcie zakupu',p,r.qty,`${invoice.number} · ${invoice.supplierName}`)});closeModal();save();alert('Zakup zapisany, stan magazynu zaktualizowany.')});},true);bindSupplierAutocomplete('invoiceForm');document.getElementById('addLine').onclick=()=>document.getElementById('rows').insertAdjacentHTML('beforeend',row());document.getElementById('rows').onclick=e=>{if(e.target.classList.contains('removeRow')){if(document.querySelectorAll('#rows tr').length>1)e.target.closest('tr').remove();else alert('Dokument musi zawierać pozycję.')}}}
 function expenseForm(){let row=()=>`<tr><td><input name="name" placeholder="Opis kosztu" required></td><td><input name="qty" type="number" step=".01" min=".01" value="1" required></td><td><input name="cost" type="number" min="0" step=".01" value="0" required></td><td><button type="button" class="danger removeExpenseRow">×</button></td></tr>`;let body=`${supplierListMarkup()}<form id="expenseForm"><div class="formgrid"><div><label>Kontrahent *</label><input name="supplier" list="supplierSuggestions" autocomplete="off" required placeholder="Wpisz lub wybierz kontrahenta"></div><div><label>NIP</label><input name="nip" autocomplete="off"></div><div><label>Numer dokumentu *</label><input name="number" required></div><div><label>Data kosztu</label><input name="date" type="date" value="${dateNow()}"></div><div><label>Koszt dostawy / dodatkowy</label><input name="shipping" type="number" min="0" step=".01" value="0"></div><div class="field full"><label>Uwagi</label><textarea name="notes"></textarea></div></div><div class="split"><h3>Pozycje kosztu</h3><button type="button" class="secondary" id="addExpenseLine">+ Pozycja</button></div><div class="table-wrap"><table><thead><tr><th>Nazwa kosztu</th><th>Ilość</th><th>Koszt/szt. (PLN)</th><th></th></tr></thead><tbody id="expenseRows">${row()}</tbody></table></div></form>`;modal('Rejestruj koszt',body,()=>{let f=document.getElementById('expenseForm');if(!f.reportValidity())return;let x=new FormData(f),items=[...document.querySelectorAll('#expenseRows tr')].map(tr=>{let v=n=>tr.querySelector(`[name=${n}]`).value;return{name:v('name').trim(),qty:+v('qty'),cost:+v('cost')}});if(!items.length||items.some(r=>!r.name||r.qty<=0||r.cost<0))return alert('Sprawdź pozycje kosztów.');let supplierName=x.get('supplier').trim();upsertSupplier(supplierName,x.get('nip'));let expense={id:crypto.randomUUID(),supplierName,nip:x.get('nip').trim(),number:x.get('number').trim(),expenseDate:x.get('date'),items,shipping:+x.get('shipping')||0,notes:x.get('notes'),grossTotal:items.reduce((sum,r)=>sum+r.qty*r.cost,0)+(+x.get('shipping')||0),created:new Date().toISOString()};data.expenses.push(expense);closeModal();save();alert('Koszt zapisany.')},true);bindSupplierAutocomplete('expenseForm');document.getElementById('addExpenseLine').onclick=()=>document.getElementById('expenseRows').insertAdjacentHTML('beforeend',row());document.getElementById('expenseRows').onclick=e=>{if(e.target.classList.contains('removeExpenseRow')){if(document.querySelectorAll('#expenseRows tr').length>1)e.target.closest('tr').remove();else alert('Rejestr kosztów musi zawierać pozycję.')}}}
-function wire(){document.querySelectorAll('[data-summary-period]').forEach(b=>b.addEventListener('click',()=>{summaryPeriod=b.dataset.summaryPeriod;render()}));document.getElementById('syncCatalogBtn')&&(document.getElementById('syncCatalogBtn').onclick=syncCatalogToCloud);document.getElementById('syncDisconnect')&&(document.getElementById('syncDisconnect').onclick=disconnectCloud);document.getElementById('addProduct')?.addEventListener('click',()=>productForm());document.getElementById('addInvoice')?.addEventListener('click',invoiceForm);document.getElementById('addExpense')?.addEventListener('click',expenseForm);document.getElementById('addSale')?.addEventListener('click',saleChoiceForm);document.getElementById('goInvoices')?.addEventListener('click',()=>{tab='invoices';render()});document.getElementById('goSales')?.addEventListener('click',()=>{tab='sales';render()});let search=document.getElementById('search');if(search)search.oninput=e=>{filter=e.target.value;let pos=e.target.selectionStart;render();let n=document.getElementById('search');n.focus();n.setSelectionRange(pos,pos)};document.querySelectorAll('[data-operation]').forEach(b=>b.onclick=()=>operationForm(b.dataset.operation,'consumption'));document.querySelectorAll('[data-adjust]').forEach(b=>b.onclick=()=>operationForm(b.dataset.adjust,'adjustment'));document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>productForm(b.dataset.edit));document.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>deleteProduct(b.dataset.delete));document.getElementById('addCategory')?.addEventListener('click',()=>{let c=document.getElementById('newCategory').value.trim();if(c&&!data.categories.includes(c)){data.categories.push(c);save()}else if(!c)alert('Wpisz nazwę kategorii.');});document.querySelectorAll('[data-category-image]').forEach(inp=>inp.onchange=()=>{let f=inp.files[0],c=inp.dataset.categoryImage;if(!f)return;if(f.size>1500000){alert('Miniaturka jest zbyt duża (limit 1,5 MB).');inp.value='';return}let r=new FileReader();r.onload=()=>{data.categoryImages[c]=r.result;save()};r.readAsDataURL(f)});document.querySelectorAll('[data-remove-category-image]').forEach(b=>b.onclick=()=>{delete data.categoryImages[b.dataset.removeCategoryImage];save()});document.querySelectorAll('[data-history-filter]').forEach(b=>b.onclick=()=>{historyFilter=b.dataset.historyFilter;render()})}
+function wire(){document.querySelectorAll('[data-summary-period]').forEach(b=>b.addEventListener('click',()=>{summaryPeriod=b.dataset.summaryPeriod;render()}));document.getElementById('syncCatalogBtn')&&(document.getElementById('syncCatalogBtn').onclick=syncCatalogToCloud);document.getElementById('syncExpensesBtn')&&(document.getElementById('syncExpensesBtn').onclick=syncExpensesToCloud);document.getElementById('syncDisconnect')&&(document.getElementById('syncDisconnect').onclick=disconnectCloud);document.getElementById('addProduct')?.addEventListener('click',()=>productForm());document.getElementById('addInvoice')?.addEventListener('click',invoiceForm);document.getElementById('addExpense')?.addEventListener('click',expenseForm);document.getElementById('addSale')?.addEventListener('click',saleChoiceForm);document.getElementById('goInvoices')?.addEventListener('click',()=>{tab='invoices';render()});document.getElementById('goSales')?.addEventListener('click',()=>{tab='sales';render()});let search=document.getElementById('search');if(search)search.oninput=e=>{filter=e.target.value;let pos=e.target.selectionStart;render();let n=document.getElementById('search');n.focus();n.setSelectionRange(pos,pos)};document.querySelectorAll('[data-operation]').forEach(b=>b.onclick=()=>operationForm(b.dataset.operation,'consumption'));document.querySelectorAll('[data-adjust]').forEach(b=>b.onclick=()=>operationForm(b.dataset.adjust,'adjustment'));document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>productForm(b.dataset.edit));document.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>deleteProduct(b.dataset.delete));document.getElementById('addCategory')?.addEventListener('click',()=>{let c=document.getElementById('newCategory').value.trim();if(c&&!data.categories.includes(c)){data.categories.push(c);save()}else if(!c)alert('Wpisz nazwę kategorii.');});document.querySelectorAll('[data-category-image]').forEach(inp=>inp.onchange=()=>{let f=inp.files[0],c=inp.dataset.categoryImage;if(!f)return;if(f.size>1500000){alert('Miniaturka jest zbyt duża (limit 1,5 MB).');inp.value='';return}let r=new FileReader();r.onload=()=>{data.categoryImages[c]=r.result;save()};r.readAsDataURL(f)});document.querySelectorAll('[data-remove-category-image]').forEach(b=>b.onclick=()=>{delete data.categoryImages[b.dataset.removeCategoryImage];save()});document.querySelectorAll('[data-history-filter]').forEach(b=>b.onclick=()=>{historyFilter=b.dataset.historyFilter;render()})}
 function exportData(){let blob=new Blob([JSON.stringify({version:5,app:'Flywooki Studio',exportedAt:new Date().toISOString(),data},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='flywooki-studio-backup-'+dateNow()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 
 function deleteProduct(id){let p=data.products.find(q=>q.id===id);if(!p)return;if(p.stock>0)return alert('Nie można usunąć produktu ze stanem większym niż 0. Najpierw wykonaj operację magazynową.');if(!confirm(`Usunąć produkt „${p.name}” (${p.cnId})? Historia operacji pozostanie zachowana.`))return;addHistory('Usunięcie produktu',p,0,'Produkt usunięty z ewidencji; wcześniejsza historia pozostaje.');data.products=data.products.filter(q=>q.id!==id);save()}
@@ -374,7 +375,7 @@ wireExport();
 const sbPanel=document.getElementById('sbPanel');
 const oauthStore=localStorage;
 function cloudConnected(){return !!oauthStore.getItem('fsm_sb_access_token') && (!oauthStore.getItem('fsm_sb_expires_at') || Number(oauthStore.getItem('fsm_sb_expires_at'))>Date.now())}
-function updateCloudDock(){let connected=cloudConnected(),btn=document.getElementById('supabaseBtn'),title=document.getElementById('syncDetailTitle'),status=document.getElementById('syncDetailStatus'),detail=document.getElementById('syncCloudDetail'),logout=document.getElementById('syncDisconnect'),syncBtn=document.getElementById('syncCatalogBtn');if(btn)btn.classList.toggle('hide',connected);if(title)title.textContent=connected?'Synchronizacja · połączenie aktywne':'Synchronizacja · lokalnie';if(status)status.textContent=connected?'Połączenie aktywne. Synchronizacja katalogu produktów dostępna.':'Dane są zapisane na tym urządzeniu.';if(detail)detail.textContent=connected?'Konto: '+(oauthStore.getItem('fsm_sb_user_label')||'GitHub')+' · dostęp do schemy fsm potwierdzony':'';if(logout)logout.classList.toggle('hide',!connected);if(syncBtn)syncBtn.classList.toggle('hide',!connected);let schema=document.getElementById('syncSchema'),revision=document.getElementById('syncRevision'),last=document.getElementById('syncLastChange'),id=document.getElementById('syncDeviceId');if(schema)schema.textContent=String(data.schemaVersion||5);if(revision)revision.textContent=String(data.sync?.revision||0);if(last)last.textContent=data.sync?.lastLocalChange?new Date(data.sync.lastLocalChange).toLocaleString('pl-PL'):'Brak';if(id)id.textContent=String(data.sync?.deviceId||deviceId)}
+function updateCloudDock(){let connected=cloudConnected(),btn=document.getElementById('supabaseBtn'),title=document.getElementById('syncDetailTitle'),status=document.getElementById('syncDetailStatus'),detail=document.getElementById('syncCloudDetail'),logout=document.getElementById('syncDisconnect'),syncBtn=document.getElementById('syncCatalogBtn'),expenseSyncBtn=document.getElementById('syncExpensesBtn');if(btn)btn.classList.toggle('hide',connected);if(title)title.textContent=connected?'Synchronizacja · połączenie aktywne':'Synchronizacja · lokalnie';if(status)status.textContent=connected?'Połączenie aktywne. Dostępna synchronizacja katalogu i rejestru kosztów.':'Dane są zapisane na tym urządzeniu.';if(detail)detail.textContent=connected?'Konto: '+(oauthStore.getItem('fsm_sb_user_label')||'GitHub')+' · dostęp do schemy fsm potwierdzony':'';if(logout)logout.classList.toggle('hide',!connected);if(syncBtn)syncBtn.classList.toggle('hide',!connected);if(expenseSyncBtn)expenseSyncBtn.classList.toggle('hide',!connected);let schema=document.getElementById('syncSchema'),revision=document.getElementById('syncRevision'),last=document.getElementById('syncLastChange'),id=document.getElementById('syncDeviceId');if(schema)schema.textContent=String(data.schemaVersion||5);if(revision)revision.textContent=String(data.sync?.revision||0);if(last)last.textContent=data.sync?.lastLocalChange?new Date(data.sync.lastLocalChange).toLocaleString('pl-PL'):'Brak';if(id)id.textContent=String(data.sync?.deviceId||deviceId)}
 function disconnectCloud(){['fsm_sb_access_token','fsm_sb_refresh_token','fsm_sb_expires_at','fsm_sb_user','fsm_sb_user_label'].forEach(k=>oauthStore.removeItem(k));updateCloudDock();document.getElementById('syncDetails')?.classList.add('show')}
 document.getElementById('supabaseBtn').onclick=()=>{sbPanel.classList.remove('hide');document.getElementById('sbUrl').value=oauthStore.getItem('fsm_sb_url')||'';document.getElementById('sbKey').value=oauthStore.getItem('fsm_sb_key')||''};document.getElementById('sbClose').onclick=()=>sbPanel.classList.add('hide');
 const APP_REDIRECT='https://7rzbrwgt6c-a11y.github.io/flywooki-studio/';
@@ -386,6 +387,105 @@ async function consumeOAuthCode(code){let url=oauthStore.getItem('fsm_sb_url'),k
 const callbackUrl=new URL(window.location.href),oauthCode=callbackUrl.searchParams.get('code'),oauthError=callbackUrl.searchParams.get('error')||callbackUrl.searchParams.get('error_description'),hashParams=new URLSearchParams(callbackUrl.hash.slice(1)),hashToken=hashParams.get('access_token');
 if(oauthCode||oauthError||hashToken){sbPanel.classList.remove('hide');cleanOAuthUrl();if(oauthError){document.getElementById('sbResult').textContent='GitHub/Supabase zwrócił błąd OAuth: '+oauthError+(callbackUrl.searchParams.get('error_description')?' — '+callbackUrl.searchParams.get('error_description'):'')}else if(oauthCode){consumeOAuthCode(oauthCode)}else if(hashToken){verifyCloudSession({access_token:hashToken,refresh_token:hashParams.get('refresh_token'),expires_in:hashParams.get('expires_in'),user:null})}}
 document.getElementById('sbGithub').onclick=async()=>{let url=document.getElementById('sbUrl').value.trim().replace(/\/$/,''),key=document.getElementById('sbKey').value.trim(),out=document.getElementById('sbResult');if(!/^https:\/\/[^ ]+\.supabase\.co$/.test(url)||!key.startsWith('sb_publishable_')){out.textContent='Sprawdź Project URL oraz Publishable key.';return}oauthStore.setItem('fsm_sb_url',url);oauthStore.setItem('fsm_sb_key',key);out.textContent='Przygotowuję bezpieczne logowanie…';try{let verifier=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');oauthStore.setItem('fsm_sb_code_verifier',verifier);let digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier));let challenge= btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');let redirect=encodeURIComponent(APP_REDIRECT);location.href=url+'/auth/v1/authorize?provider=github&apikey='+encodeURIComponent(key)+'&redirect_to='+redirect+'&code_challenge='+encodeURIComponent(challenge)+'&code_challenge_method=s256'}catch(e){out.textContent='Nie można przygotować OAuth PKCE: '+e.message}};
+// Synchronizacja rejestru kosztow. Zakupy, sprzedaz, produkty i stany magazynowe pozostaja poza tym procesem.
+async function syncExpensesToCloud(){
+ if(!cloudConnected()){alert('Najpierw połącz FSM z Supabase.');return}
+ const localDocs=Array.isArray(data.expenses)?data.expenses:[];
+ if(!confirm('Wysłać '+localDocs.length+' lokalnych dokumentów kosztowych do Supabase i pobrać dokumenty kosztowe z chmury? Synchronizacja nie zmienia zakupów, sprzedaży ani stanów magazynowych. Przed kontynuacją wykonaj eksport kopii.'))return;
+ let btn=document.getElementById('syncExpensesBtn'),status=document.getElementById('syncDetailStatus'),detail=document.getElementById('syncCloudDetail');
+ if(btn){btn.disabled=true;btn.textContent='Synchronizuję koszty…'}
+ if(status)status.textContent='Przesyłanie i pobieranie rejestru kosztów…';
+ try{
+  const url=oauthStore.getItem('fsm_sb_url'),key=oauthStore.getItem('fsm_sb_key'),token=oauthStore.getItem('fsm_sb_access_token');
+  const baseHeaders={apikey:key,Authorization:'Bearer '+token,'Accept-Profile':'fsm','Content-Profile':'fsm'};
+  const apiError=async(response,label)=>{const body=await response.text();if(!response.ok)throw new Error(label+' · HTTP '+response.status+' · '+body.slice(0,360));return body};
+  const postUpsert=async(table,rows)=>{
+   if(!rows.length)return;
+   const response=await fetch(url+'/rest/v1/'+table+'?on_conflict=id',{method:'POST',headers:{...baseHeaders,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
+   await apiError(response,'Zapis '+table);
+  };
+  const getAll=async(path,label)=>{
+   const all=[];let offset=0;const pageSize=500;
+   while(true){
+    const response=await fetch(url+'/rest/v1/'+path,{headers:{...baseHeaders,Range:offset+'-'+(offset+pageSize-1),'Range-Unit':'items'}});
+    const body=await apiError(response,label);
+    const rows=body?JSON.parse(body):[];all.push(...rows);
+    if(rows.length<pageSize)break;
+    offset+=rows.length;
+   }
+   return all;
+  };
+
+  // Zapewnij stabilne UUID dokumentow i pozycji przed wyslaniem. Kolejne synchronizacje nie utworza duplikatow.
+  let idsAdded=false;
+  for(const doc of localDocs){
+   if(!doc.id){doc.id=crypto.randomUUID();idsAdded=true}
+   if(!Array.isArray(doc.items))doc.items=[];
+   doc.items.forEach(item=>{if(!item.id){item.id=crypto.randomUUID();idsAdded=true}});
+  }
+  if(idsAdded){save();btn=document.getElementById('syncExpensesBtn');status=document.getElementById('syncDetailStatus');detail=document.getElementById('syncCloudDetail')}
+
+  const documents=localDocs.map(doc=>({
+   id:doc.id,
+   supplier_id:null,
+   supplier_name:String(doc.supplierName||'Nieznany kontrahent'),
+   supplier_nip:String(doc.nip||'').trim()||null,
+   document_number:String(doc.number||doc.id),
+   expense_date:/^\d{4}-\d{2}-\d{2}$/.test(String(doc.expenseDate||''))?doc.expenseDate:dateNow(),
+   currency:'PLN',
+   shipping_cost:Math.max(0,Number(doc.shipping)||0),
+   notes:String(doc.notes||'')||null,
+   gross_total:Math.max(0,Number(doc.grossTotal)||0)
+  }));
+  await postUpsert('expense_documents',documents);
+
+  const items=[];
+  localDocs.forEach(doc=>(doc.items||[]).forEach((item,index)=>items.push({
+   id:item.id,
+   document_id:doc.id,
+   line_no:index+1,
+   description:String(item.name||item.description||'Pozycja kosztowa'),
+   quantity:Math.max(0.001,Number(item.qty??item.quantity)||1),
+   unit_cost:Math.max(0,Number(item.cost??item.unit_cost)||0)
+  })));
+  await postUpsert('expense_items',items);
+
+  // Pobierz caly rejestr kosztow widoczny dla zalogowanego wlasciciela.
+  const remoteDocs=await getAll('expense_documents?select=id,supplier_name,supplier_nip,document_number,expense_date,currency,shipping_cost,notes,gross_total,created_at&order=expense_date.asc','Odczyt dokumentow kosztowych');
+  const remoteItems=await getAll('expense_items?select=id,document_id,line_no,description,quantity,unit_cost&order=document_id.asc,line_no.asc','Odczyt pozycji kosztowych');
+  const byDocument=new Map();
+  for(const item of remoteItems){if(!byDocument.has(item.document_id))byDocument.set(item.document_id,[]);byDocument.get(item.document_id).push({id:item.id,name:item.description,qty:Number(item.quantity)||1,cost:Number(item.unit_cost)||0})}
+
+  const localById=new Map(localDocs.map(doc=>[doc.id,doc]));
+  for(const remote of remoteDocs){
+   const remoteItemsForDoc=byDocument.get(remote.id)||[];
+   const local=localById.get(remote.id);
+   if(local){
+    // Lokalny dokument jest zrodlem dla rekordow wyslanych w tej synchronizacji; uzupelnij tylko brakujace identyfikatory pozycji.
+    const localItemIds=new Set((local.items||[]).map(i=>i.id));
+    remoteItemsForDoc.forEach(item=>{if(!localItemIds.has(item.id))local.items.push(item)});
+    if(local.supplierName)upsertSupplier(local.supplierName,local.nip||'');
+   }else{
+    const imported={id:remote.id,supplierName:remote.supplier_name||'Nieznany kontrahent',nip:remote.supplier_nip||'',number:remote.document_number||'',expenseDate:remote.expense_date||dateNow(),items:remoteItemsForDoc,shipping:Number(remote.shipping_cost)||0,notes:remote.notes||'',grossTotal:Number(remote.gross_total)||0,created:remote.created_at||new Date().toISOString()};
+    data.expenses.push(imported);localById.set(imported.id,imported);
+    if(imported.supplierName)upsertSupplier(imported.supplierName,imported.nip);
+   }
+  }
+  data.expenses.sort((a,b)=>String(a.expenseDate||a.created||'').localeCompare(String(b.expenseDate||b.created||'')));
+  save();
+  data.sync.lastSync=new Date().toISOString();data.sync.status='synced';localStorage.setItem(KEY,JSON.stringify(data));
+  if(status)status.textContent='Rejestr kosztów zsynchronizowany. W chmurze: '+remoteDocs.length+' dokumentów i '+remoteItems.length+' pozycji.';
+  if(detail)detail.textContent='Konto: '+(oauthStore.getItem('fsm_sb_user_label')||'GitHub')+' · koszty zsynchronizowane';
+  alert('Synchronizacja kosztów zakończona. W chmurze: '+remoteDocs.length+' dokumentów i '+remoteItems.length+' pozycji.');
+ }catch(e){
+  if(status)status.textContent='Synchronizacja kosztów nie powiodła się: '+e.message;
+  alert('Błąd synchronizacji kosztów: '+e.message+'\n\nLokalne dane nie zostały usunięte. W razie przerwania ponów synchronizację — identyfikatory dokumentów i pozycji są zachowywane lokalnie.');
+ }finally{
+  btn=document.getElementById('syncExpensesBtn');
+  if(btn){btn.disabled=false;btn.textContent='Synchronizuj koszty'}
+ }
+}
+
 async function syncCatalogToCloud(){
  const btn=document.getElementById('syncCatalogBtn'),status=document.getElementById('syncDetailStatus'),detail=document.getElementById('syncCloudDetail');
  if(!cloudConnected()){alert('Najpierw połącz FSM z Supabase.');return}
