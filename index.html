@@ -445,7 +445,7 @@ const KEY='flywooki-studio-v04',OLD='flywooki-studio-v02',LEGACY='filamentstock-
 let deviceId=localStorage.getItem(DEVICE_KEY);if(!deviceId){deviceId=crypto.randomUUID();localStorage.setItem(DEVICE_KEY,deviceId)}
 let data=load(),tab='dashboard',filter='',summaryPeriod='month';
 function blank(){return{schemaVersion:5,sync:{deviceId,revision:0,lastLocalChange:null,lastSync:null,status:'local-only'},products:[],categories:['PLA','PLA+','PETG','ABS','ASA','TPU','PC','PA','PLA Silk','PLA CF','PETG CF','Inny'],history:[],suppliers:[],invoices:[],expenses:[],sales:[]}}
-function ensureMeta(d){d.schemaVersion=5;d.expenses=Array.isArray(d.expenses)?d.expenses:[];d.suppliers=Array.isArray(d.suppliers)?d.suppliers:[];d.invoices=Array.isArray(d.invoices)?d.invoices:[];d.sync=Object.assign({deviceId,revision:0,lastLocalChange:null,lastSync:null,status:'local-only',deletedExpenseIds:[],deletedExpenseItemIds:[],deletedPurchaseIds:[],purchaseStockApplied:{},purchaseCloudSeen:[]},d.sync||{});d.sync.deletedExpenseIds=Array.isArray(d.sync.deletedExpenseIds)?d.sync.deletedExpenseIds:[];d.sync.deletedExpenseItemIds=Array.isArray(d.sync.deletedExpenseItemIds)?d.sync.deletedExpenseItemIds:[];d.sync.deletedPurchaseIds=Array.isArray(d.sync.deletedPurchaseIds)?d.sync.deletedPurchaseIds:[];d.sync.purchaseStockApplied=d.sync.purchaseStockApplied&&typeof d.sync.purchaseStockApplied==='object'?d.sync.purchaseStockApplied:{};d.sync.purchaseCloudSeen=Array.isArray(d.sync.purchaseCloudSeen)?d.sync.purchaseCloudSeen:[];d.sync.deviceId=deviceId;return d}
+function ensureMeta(d){d.schemaVersion=5;d.expenses=Array.isArray(d.expenses)?d.expenses:[];d.suppliers=Array.isArray(d.suppliers)?d.suppliers:[];d.invoices=Array.isArray(d.invoices)?d.invoices:[];d.sync=Object.assign({deviceId,revision:0,lastLocalChange:null,lastSync:null,status:'local-only',deletedExpenseIds:[],deletedExpenseItemIds:[],deletedPurchaseIds:[],purchaseStockApplied:{},purchaseCloudSeen:[],productImageHashes:{}},d.sync||{});d.sync.productImageHashes=d.sync.productImageHashes&&typeof d.sync.productImageHashes==='object'?d.sync.productImageHashes:{};d.sync.deletedExpenseIds=Array.isArray(d.sync.deletedExpenseIds)?d.sync.deletedExpenseIds:[];d.sync.deletedExpenseItemIds=Array.isArray(d.sync.deletedExpenseItemIds)?d.sync.deletedExpenseItemIds:[];d.sync.deletedPurchaseIds=Array.isArray(d.sync.deletedPurchaseIds)?d.sync.deletedPurchaseIds:[];d.sync.purchaseStockApplied=d.sync.purchaseStockApplied&&typeof d.sync.purchaseStockApplied==='object'?d.sync.purchaseStockApplied:{};d.sync.purchaseCloudSeen=Array.isArray(d.sync.purchaseCloudSeen)?d.sync.purchaseCloudSeen:[];d.sync.deviceId=deviceId;return d}
 function migrateLegacy(old){let d=blank();d.history=old.history||[];d.suppliers=old.suppliers||[];d.invoices=old.invoices||[];d.sales=(old.sales||[]).map(s=>({...s,productCN:s.cn||s.productCN||''}));let groups=new Map();(old.spools||[]).forEach(s=>{let cn=String(s.cn||'').trim();let key=cn?('CN:'+cn):[s.brand,s.material,s.color,s.name.replace(/ · \\d+$/,'')].join('|');let p=groups.get(key);if(!p){p={id:crypto.randomUUID(),cnId:cn||('LEGACY-'+Math.random().toString(36).slice(2,8).toUpperCase()),name:s.name.replace(/ · \\d+$/,''),brand:s.brand||'Nieznany',category:s.material||'Inny',color:s.color||'Nie określono',stock:0,unitWeight:+s.initial||1000,unitCost:+s.cost||0,retailPrice:+s.retailPrice||0,lowThreshold:150,createdAt:new Date().toISOString()};groups.set(key,p)}p.stock+=(+s.remaining||0);if(!cn)p.cnId='LEGACY-'+Math.random().toString(36).slice(2,8).toUpperCase();});d.products=[...groups.values()];return d}
 function load(){try{let v=JSON.parse(localStorage.getItem(KEY));if(v)return ensureMeta(Object.assign(blank(),v));let old=JSON.parse(localStorage.getItem(OLD))||JSON.parse(localStorage.getItem(LEGACY));if(old){let d=ensureMeta(migrateLegacy(old));localStorage.setItem(KEY,JSON.stringify(d));return d}}catch(e){console.warn(e)}return blank()}
 function save(){ensureMeta(data);data.sync.revision=(+data.sync.revision||0)+1;data.sync.lastLocalChange=new Date().toISOString();data.sync.status='local-only';localStorage.setItem(KEY,JSON.stringify(data));render()}
@@ -563,7 +563,7 @@ function catalog(){return `<section class="panel"><h2>Katalog</h2><p class="subt
 function historyTable(rows){return `<div class="table-wrap"><table><thead><tr><th>Data</th><th>Operacja</th><th>Produkt / CN</th><th>Ilość</th><th>Szczegóły</th></tr></thead><tbody>${rows.map(h=>`<tr><td>${new Date(h.date).toLocaleString('pl-PL')}</td><td>${esc(h.action)}</td><td>${esc(h.productName)}<br><small>${esc(h.cnId||'')}</small></td><td>${h.qty==null?'—':fmt(h.qty)+' szt.'}</td><td>${esc(h.note||'')}</td></tr>`).join('')}</tbody></table></div>`}
 function history(){let rows=data.history.filter(h=>{let a=(h.action+' '+(h.note||'')).toLowerCase();return historyFilter==='all'||(historyFilter==='buy'&&(/zakup|przyjęcie/.test(a)))||(historyFilter==='sale'&&(/sprzedaż/.test(a)))||(historyFilter==='out'&&(/rozchód|zuży|consumption/.test(a))) });return `<section class="panel"><h2>Historia operacji</h2><div class="actions filters"><button class="secondary" data-history-filter="all">Wszystkie</button><button class="secondary" data-history-filter="buy">Zakupy</button><button class="secondary" data-history-filter="sale">Sprzedaż</button><button class="secondary" data-history-filter="out">Rozchody</button></div>${rows.length?historyTable(rows):`<div class="empty">Brak operacji w tym filtrze.</div>`}</section>`}
 function modal(title,body,onSave,wide=false){document.getElementById('modalRoot').innerHTML=`<div class="modal"><div class="dialog" style="${wide?'max-width:1000px':''}"><h2>${title}</h2>${body}<footer><button class="secondary" id="cancel">Anuluj</button><button id="save">Zapisz</button></footer></div></div>`;applyFuiFrames(document.getElementById('modalRoot'));document.getElementById('cancel').onclick=closeModal;document.getElementById('save').onclick=onSave}function closeModal(){document.getElementById('modalRoot').innerHTML=''}
-function productForm(id){let p=data.products.find(x=>x.id===id);let body=`<form id="productForm"><div class="field full"><label>Zdjęcie produktu</label><input name="imageFile" type="file" accept="image/*"><img id="productPhotoPreview" class="photoPreview ${p?.image?'':'hide'}" src="${p?.image||''}" alt="Podgląd zdjęcia"><button type="button" class="secondary" id="removePhoto" ${p?.image?'':'disabled'}>Usuń zdjęcie</button><p class="small">Zdjęcie zapisuje się lokalnie przy produkcie. Zalecane zdjęcia niewielkich rozmiarów.</p></div><div class="formgrid"><div><label>ID CN / kod unikalny *</label><input name="cn" required value="${esc(p?.cnId||'')}"></div><div><label>Nazwa produktu *</label><input name="name" required value="${esc(p?.name||'')}"></div><div><label>Producent</label><input name="brand" value="${esc(p?.brand||'')}"></div><div><label>Kategoria *</label><select name="category">${data.categories.map(c=>`<option ${p?.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div><div><label>Masa jednej sztuki (g)</label><input name="weight" type="number" min="1" value="${p?.unitWeight||1000}"></div><div><label>Koszt zakupu/szt. (PLN)</label><input name="cost" type="number" min="0" step=".01" value="${p?.unitCost||0}"></div><div><label>Cena sprzedaży/szt. (PLN)</label><input name="retail" type="number" min="0" step=".01" value="${p?.retailPrice||0}"></div><div><label>Stan (szt.)</label><input name="stock" type="number" min="0" step=".01" value="${p?.stock||0}" ${p?'disabled':''}></div><div><label>Alert przy stanie (szt.)</label><input name="low" type="number" min="0" value="${p?.lowThreshold||1}"></div></div>${p?'<p class="small">Stan zmieniaj przez operację magazynową, nie przez edycję produktu.</p>':''}</form>`;modal(p?'Edytuj produkt':'Dodaj filament',body,()=>{let f=document.getElementById('productForm');if(!f.reportValidity())return;let x=new FormData(f),cn=x.get('cn').trim();let imgFile=f.elements.imageFile.files[0];let applyProductSave=(imageVal)=>{if(data.products.some(q=>q.cnId===cn&&q.id!==p?.id))return alert('Ten ID CN już istnieje.');if(p){Object.assign(p,{cnId:cn,name:x.get('name').trim(),brand:x.get('brand'),category:x.get('category'),unitWeight:+x.get('weight'),unitCost:+x.get('cost'),retailPrice:+x.get('retail'),lowThreshold:+x.get('low'),image:imageVal})}else{let q={id:crypto.randomUUID(),cnId:cn,name:x.get('name').trim(),brand:x.get('brand')||'Nieznany',category:x.get('category'),color:'',unitWeight:+x.get('weight')||1000,unitCost:+x.get('cost')||0,retailPrice:+x.get('retail')||0,stock:+x.get('stock')||0,lowThreshold:+x.get('low')||1,image:imageVal||'',createdAt:new Date().toISOString()};data.products.push(q);if(q.stock)addHistory('Stan początkowy',q,q.stock,'Wprowadzenie początkowego stanu')}closeModal();save()};if(imgFile){if(imgFile.size>1500000)return alert('Zdjęcie jest zbyt duże (limit 1,5 MB). Zmniejsz je przed dodaniem.');let rd=new FileReader();rd.onload=()=>applyProductSave(rd.result);rd.readAsDataURL(imgFile)}else applyProductSave(photoInput?.dataset.remove==='1'?'':(p?.image||''))});let photoInput=document.querySelector('#productForm [name=imageFile]'),preview=document.getElementById('productPhotoPreview'),removeBtn=document.getElementById('removePhoto');photoInput.onchange=()=>{let f=photoInput.files[0];if(!f)return;if(f.size>1500000){alert('Zdjęcie jest zbyt duże (limit 1,5 MB).');photoInput.value='';return}let rd=new FileReader();rd.onload=()=>{preview.src=rd.result;preview.classList.remove('hide');removeBtn.disabled=false;photoInput.dataset.remove='0'};rd.readAsDataURL(f)};removeBtn.onclick=()=>{preview.src='';preview.classList.add('hide');removeBtn.disabled=true;photoInput.dataset.remove='1';photoInput.value=''};}
+function productForm(id){let p=data.products.find(x=>x.id===id);let body=`<form id="productForm"><div class="field full"><label>Zdjęcie produktu</label><input name="imageFile" type="file" accept="image/*"><img id="productPhotoPreview" class="photoPreview ${p?.image?'':'hide'}" src="${p?.image||''}" alt="Podgląd zdjęcia"><button type="button" class="secondary" id="removePhoto" ${p?.image?'':'disabled'}>Usuń zdjęcie</button><p class="small">Zdjęcie zapisuje się lokalnie i po połączeniu jest synchronizowane przez Supabase Storage. Limit 1,5 MB.</p></div><div class="formgrid"><div><label>ID CN / kod unikalny *</label><input name="cn" required value="${esc(p?.cnId||'')}"></div><div><label>Nazwa produktu *</label><input name="name" required value="${esc(p?.name||'')}"></div><div><label>Producent</label><input name="brand" value="${esc(p?.brand||'')}"></div><div><label>Kategoria *</label><select name="category">${data.categories.map(c=>`<option ${p?.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div><div><label>Masa jednej sztuki (g)</label><input name="weight" type="number" min="1" value="${p?.unitWeight||1000}"></div><div><label>Koszt zakupu/szt. (PLN)</label><input name="cost" type="number" min="0" step=".01" value="${p?.unitCost||0}"></div><div><label>Cena sprzedaży/szt. (PLN)</label><input name="retail" type="number" min="0" step=".01" value="${p?.retailPrice||0}"></div><div><label>Stan (szt.)</label><input name="stock" type="number" min="0" step=".01" value="${p?.stock||0}" ${p?'disabled':''}></div><div><label>Alert przy stanie (szt.)</label><input name="low" type="number" min="0" value="${p?.lowThreshold||1}"></div></div>${p?'<p class="small">Stan zmieniaj przez operację magazynową, nie przez edycję produktu.</p>':''}</form>`;modal(p?'Edytuj produkt':'Dodaj filament',body,()=>{let f=document.getElementById('productForm');if(!f.reportValidity())return;let x=new FormData(f),cn=x.get('cn').trim();let imgFile=f.elements.imageFile.files[0];let applyProductSave=(imageVal)=>{if(data.products.some(q=>q.cnId===cn&&q.id!==p?.id))return alert('Ten ID CN już istnieje.');if(p){Object.assign(p,{cnId:cn,name:x.get('name').trim(),brand:x.get('brand'),category:x.get('category'),unitWeight:+x.get('weight'),unitCost:+x.get('cost'),retailPrice:+x.get('retail'),lowThreshold:+x.get('low'),image:imageVal,imageDeleted:(photoInput?.dataset.remove==='1'&&!imageVal)})}else{let q={id:crypto.randomUUID(),cnId:cn,name:x.get('name').trim(),brand:x.get('brand')||'Nieznany',category:x.get('category'),color:'',unitWeight:+x.get('weight')||1000,unitCost:+x.get('cost')||0,retailPrice:+x.get('retail')||0,stock:+x.get('stock')||0,lowThreshold:+x.get('low')||1,image:imageVal||'',imageDeleted:false,createdAt:new Date().toISOString()};data.products.push(q);if(q.stock)addHistory('Stan początkowy',q,q.stock,'Wprowadzenie początkowego stanu')}closeModal();save()};if(imgFile){if(imgFile.size>1500000)return alert('Zdjęcie jest zbyt duże (limit 1,5 MB). Zmniejsz je przed dodaniem.');let rd=new FileReader();rd.onload=()=>applyProductSave(rd.result);rd.readAsDataURL(imgFile)}else applyProductSave(photoInput?.dataset.remove==='1'?'':(p?.image||''))});let photoInput=document.querySelector('#productForm [name=imageFile]'),preview=document.getElementById('productPhotoPreview'),removeBtn=document.getElementById('removePhoto');photoInput.onchange=()=>{let f=photoInput.files[0];if(!f)return;if(f.size>1500000){alert('Zdjęcie jest zbyt duże (limit 1,5 MB).');photoInput.value='';return}let rd=new FileReader();rd.onload=()=>{preview.src=rd.result;preview.classList.remove('hide');removeBtn.disabled=false;photoInput.dataset.remove='0'};rd.readAsDataURL(f)};removeBtn.onclick=()=>{preview.src='';preview.classList.add('hide');removeBtn.disabled=true;photoInput.dataset.remove='1';photoInput.value=''};}
 function operationForm(id,kind='adjustment'){let p=data.products.find(q=>q.id===id);if(!p)return;modal(kind==='adjustment'?'Korekta stanu':'Rozchód',`<form id="opForm"><div class="notice">${esc(p.name)} · ${esc(p.cnId)} · stan: ${fmt(p.stock)} szt.</div><div class="formgrid"><div><label>Typ operacji</label><select name="type"><option value="consumption">Zużycie własne</option><option value="sale">Sprzedaż</option><option value="adjustment">Korekta (+/-)</option></select></div><div><label>Ilość (szt.)</label><input name="qty" type="number" step=".01" required></div><div><label>Cena sprzedaży/szt. (PLN; sprzedaż)</label><input name="price" type="number" step=".01" min="0" value="${p.retailPrice||0}"></div><div><label>Dokument / klient</label><input name="doc"></div><div class="field full"><label>Uwagi / powód</label><input name="note"></div></div><p class="small">Korekta: wpisz wartość dodatnią, aby zwiększyć stan, lub ujemną, aby go zmniejszyć.</p></form>`,()=>{let f=document.getElementById('opForm');if(!f.reportValidity())return;let x=new FormData(f),type=x.get('type'),q=+x.get('qty');if(type==='adjustment'&&q===0)return alert('Korekta nie może wynosić zero.');if(type!=='adjustment'&&q<=0)return alert('Ilość musi być dodatnia.');if(type==='adjustment'){if(p.stock+q<0)return alert('Korekta przekracza stan.');p.stock+=q;addHistory('Korekta',p,q,x.get('note'))}else{if(q>p.stock)return alert('Brak wystarczającego stanu.');p.stock-=q;if(type==='sale'){let price=+x.get('price')||0,sale={id:crypto.randomUUID(),productId:p.id,productCN:p.cnId,productName:p.name,qty:q,unitWeight:p.unitWeight,pricePerUnit:price,revenue:q*price,date:dateNow(),document:x.get('doc'),customer:'',note:x.get('note'),costAtSale:q*p.unitCost};data.sales.push(sale);addHistory('Sprzedaż',p,-q,`${x.get('doc')} · przychód ${money(sale.revenue)}`)}else addHistory('Zużycie własne',p,-q,x.get('note'))}closeModal();save()})}
 
 function saleChoiceForm(){let available=data.products.filter(p=>p.stock>0);if(!available.length)return;modal('Wybierz produkt do sprzedaży',`<form id="saleChoice"><label>Produkt *</label><select name="product" required>${available.map(p=>`<option value="${p.id}">${esc(p.name)} · ${esc(p.cnId)} · stan ${fmt(p.stock)}</option>`).join('')}</select></form>`,()=>{let id=document.getElementById('saleChoice').elements.product.value;closeModal();operationForm(id,'sale')})}
@@ -657,7 +657,7 @@ function updateAutoSyncIndicator(){
  const left=Math.max(0,nextAutoSyncAt-Date.now()),elapsed=Math.min(10000,Math.max(0,10000-left));
  if(mode)mode.textContent='AUTO / ONLINE';if(text)text.textContent='AUTO SYNC · CO 10 S';if(remaining)remaining.textContent=Math.ceil(left/1000)+'s';if(bar)bar.style.width=(elapsed/10000*100).toFixed(1)+'%';
 }
-function updateCloudDock(){let connected=cloudConnected(),btn=document.getElementById('supabaseBtn'),title=document.getElementById('syncDetailTitle'),status=document.getElementById('syncDetailStatus'),detail=document.getElementById('syncCloudDetail'),logout=document.getElementById('syncDisconnect'),syncBtn=document.getElementById('syncAllBtn');if(btn)btn.classList.toggle('hide',connected);if(title)title.textContent=connected?'Synchronizacja · połączenie aktywne':'Synchronizacja · lokalnie';if(status&&(!status.textContent||status.textContent==='Dane są zapisane na tym urządzeniu.'))status.textContent=connected?'Auto-synchronizacja co 10 sekund.':'Dane są zapisane na tym urządzeniu.';if(detail)detail.textContent=connected?'Konto: '+(oauthStore.getItem('fsm_sb_user_label')||'GitHub')+' · katalog + zakupy + koszty':'';if(logout)logout.classList.toggle('hide',!connected);if(syncBtn)syncBtn.classList.toggle('hide',!connected);let schema=document.getElementById('syncSchema'),revision=document.getElementById('syncRevision'),last=document.getElementById('syncLastChange'),id=document.getElementById('syncDeviceId');if(schema)schema.textContent=String(data.schemaVersion||5);if(revision)revision.textContent=String(data.sync?.revision||0);if(last)last.textContent=data.sync?.lastLocalChange?new Date(data.sync.lastLocalChange).toLocaleString('pl-PL'):'Brak';if(id)id.textContent=String(data.sync?.deviceId||deviceId);if(connected&&!nextAutoSyncAt)nextAutoSyncAt=Date.now()+10000;if(!connected)nextAutoSyncAt=0;updateAutoSyncIndicator()}
+function updateCloudDock(){let connected=cloudConnected(),btn=document.getElementById('supabaseBtn'),title=document.getElementById('syncDetailTitle'),status=document.getElementById('syncDetailStatus'),detail=document.getElementById('syncCloudDetail'),logout=document.getElementById('syncDisconnect'),syncBtn=document.getElementById('syncAllBtn');if(btn)btn.classList.toggle('hide',connected);if(title)title.textContent=connected?'Synchronizacja · połączenie aktywne':'Synchronizacja · lokalnie';if(status&&(!status.textContent||status.textContent==='Dane są zapisane na tym urządzeniu.'))status.textContent=connected?'Auto-synchronizacja co 10 sekund.':'Dane są zapisane na tym urządzeniu.';if(detail)detail.textContent=connected?'Konto: '+(oauthStore.getItem('fsm_sb_user_label')||'GitHub')+' · katalog + zdjęcia + magazyn + zakupy + koszty':'';if(logout)logout.classList.toggle('hide',!connected);if(syncBtn)syncBtn.classList.toggle('hide',!connected);let schema=document.getElementById('syncSchema'),revision=document.getElementById('syncRevision'),last=document.getElementById('syncLastChange'),id=document.getElementById('syncDeviceId');if(schema)schema.textContent=String(data.schemaVersion||5);if(revision)revision.textContent=String(data.sync?.revision||0);if(last)last.textContent=data.sync?.lastLocalChange?new Date(data.sync.lastLocalChange).toLocaleString('pl-PL'):'Brak';if(id)id.textContent=String(data.sync?.deviceId||deviceId);if(connected&&!nextAutoSyncAt)nextAutoSyncAt=Date.now()+10000;if(!connected)nextAutoSyncAt=0;updateAutoSyncIndicator()}
 function disconnectCloud(){['fsm_sb_access_token','fsm_sb_refresh_token','fsm_sb_expires_at','fsm_sb_user','fsm_sb_user_label','fsm_catalog_sync_hash','fsm_expenses_sync_hash'].forEach(k=>oauthStore.removeItem(k));updateCloudDock();document.getElementById('syncDetails')?.classList.add('show')}
 document.getElementById('supabaseBtn').onclick=()=>{sbPanel.classList.remove('hide');document.getElementById('sbUrl').value=oauthStore.getItem('fsm_sb_url')||'';document.getElementById('sbKey').value=oauthStore.getItem('fsm_sb_key')||''};document.getElementById('sbClose').onclick=()=>sbPanel.classList.add('hide');
 const APP_REDIRECT='https://7rzbrwgt6c-a11y.github.io/flywooki-studio/';
@@ -675,17 +675,33 @@ async function fingerprint(value){
  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(value)));
  return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
 }
-async function syncCatalogToCloud(){
- if(!data.products.length)return true;
- const url=oauthStore.getItem('fsm_sb_url'),key=oauthStore.getItem('fsm_sb_key'),token=await getCloudAccessToken();
- const rows=data.products.map(p=>({id:p.id,name:p.name,manufacturer:p.brand||null,material:p.category||null,color:p.color||null,color_code:null,cn_code:p.cnId||null,purchase_price_net:Number(p.unitCost)||0,purchase_price_gross:Number(p.unitCost)||0,sale_price:Number(p.retailPrice)||0,active:true,notes:'FSM sync; stock not included'}));
- const hash=await fingerprint(rows);
- if(hash===oauthStore.getItem('fsm_catalog_sync_hash'))return true;
- const response=await fetch(url+'/rest/v1/products?on_conflict=id',{method:'POST',headers:{apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json','Accept-Profile':'fsm','Content-Profile':'fsm','Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
- const body=await response.text();
- if(!response.ok)throw new Error('Katalog · HTTP '+response.status+' · '+body.slice(0,300));
- oauthStore.setItem('fsm_catalog_sync_hash',hash);oauthStore.setItem('fsm_catalog_sync_at',new Date().toISOString());
- return true;
+async function syncCatalogToCloud(ctx){
+ const fields='id,name,manufacturer,material,color,color_code,cn_code,purchase_price_net,purchase_price_gross,sale_price,unit_weight,low_threshold,active,notes,updated_at';
+ const localRows=data.products.map(p=>({id:p.id,name:p.name,manufacturer:p.brand||null,material:p.category||null,color:p.color||null,color_code:null,cn_code:p.cnId||null,purchase_price_net:Number(p.unitCost)||0,purchase_price_gross:Number(p.unitCost)||0,sale_price:Number(p.retailPrice)||0,unit_weight:Number(p.unitWeight)||1000,low_threshold:Number(p.lowThreshold)||1,active:true,notes:p.notes||null}));
+ const hash=await fingerprint(localRows);
+ if(localRows.length&&hash!==oauthStore.getItem('fsm_catalog_sync_hash')){
+  await ctx.postRows('products',localRows);
+  oauthStore.setItem('fsm_catalog_sync_hash',hash);oauthStore.setItem('fsm_catalog_sync_at',new Date().toISOString());
+ }
+ // Pobieramy katalog po wysłaniu lokalnych zmian. Dzięki temu urządzenie bez lokalnego katalogu
+ // dostaje produkty, a aplikacja nie traktuje samego wysłania jako pełnej synchronizacji.
+ const remote=await ctx.getAll('products?select='+fields+'&order=name.asc','Pobieranie katalogu produktów');
+ const byId=new Map(data.products.map(p=>[String(p.id),p]));
+ const byCn=new Map(data.products.map(p=>[String(p.cnId||''),p]).filter(([cn])=>cn));
+ let changed=false;
+ for(const rp of remote){
+  let p=byId.get(String(rp.id))||(rp.cn_code?byCn.get(String(rp.cn_code)):null);
+  if(!p){
+   p={id:rp.id,cnId:rp.cn_code||('REMOTE-'+String(rp.id).slice(0,8)),name:rp.name||'Produkt z Supabase',brand:rp.manufacturer||'Nieznany',category:rp.material||'Inny',color:rp.color||'',unitWeight:Number(rp.unit_weight)||1000,unitCost:Number(rp.purchase_price_gross)||Number(rp.purchase_price_net)||0,retailPrice:Number(rp.sale_price)||0,stock:0,lowThreshold:Number(rp.low_threshold)||1,image:'',createdAt:rp.created_at||new Date().toISOString()};
+   data.products.push(p);byId.set(String(p.id),p);if(p.cnId)byCn.set(String(p.cnId),p);changed=true;
+  }else{
+   // Uzupełniajemy brakujące metadane, ale nie nadpisujemy danych lokalnych nowszą kopią bez znacznika wersji.
+   if(!p.unitWeight&&rp.unit_weight){p.unitWeight=Number(rp.unit_weight);changed=true;}
+   if(!p.lowThreshold&&rp.low_threshold){p.lowThreshold=Number(rp.low_threshold);changed=true;}
+   if(!p.cnId&&rp.cn_code){p.cnId=rp.cn_code;changed=true;}
+  }
+ }
+ return{remoteProducts:remote,changed};
 }
 async function cloudApiContext(){
  const url=oauthStore.getItem('fsm_sb_url'),key=oauthStore.getItem('fsm_sb_key'),token=await getCloudAccessToken();
@@ -832,22 +848,139 @@ async function syncExpensesToCloud(){
  data.sync.lastSync=new Date().toISOString();data.sync.status='synced';localStorage.setItem(KEY,JSON.stringify(data));
  return {documents:remoteDocs.length,items:remoteItems.length};
 }
+async function cloudOwnerId(ctx){
+ const response=await fetch(ctx.url+'/auth/v1/user',{headers:{apikey:ctx.key,Authorization:'Bearer '+ctx.token}});
+ const body=await response.json().catch(()=>({}));
+ if(!response.ok||!body.id)throw new Error('Nie można ustalić identyfikatora użytkownika Supabase. HTTP '+response.status+' · '+(body.message||body.msg||''));
+ return body.id;
+}
+function dataUrlToBlob(dataUrl){return fetch(dataUrl).then(r=>{if(!r.ok)throw new Error('Nie można odczytać lokalnego zdjęcia produktu.');return r.blob()})}
+function blobToDataUrl(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('Nie udało się odczytać zdjęcia pobranego z Supabase.'));reader.readAsDataURL(blob);});}
+function imageMimeExtension(mime){return({'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif'})[String(mime||'').toLowerCase()]||''}
+function storageObjectUrl(ctx,path,mode='authenticated'){const encoded=String(path).split('/').map(encodeURIComponent).join('/');return ctx.url+'/storage/v1/object'+(mode?'/'+mode:'')+'/fsm-product-images/'+encoded;}
+async function storageUpload(ctx,path,blob){
+ const ext=imageMimeExtension(blob.type);if(!ext)throw new Error('Nieobsługiwany format zdjęcia ('+(blob.type||'brak typu')+'). Użyj JPG, PNG, WEBP lub GIF.');
+ if(blob.size>1572864)throw new Error('Zdjęcie przekracza limit 1,5 MB.');
+ const response=await fetch(storageObjectUrl(ctx,path,''),{method:'POST',headers:{apikey:ctx.key,Authorization:'Bearer '+ctx.token,'Content-Type':blob.type,'x-upsert':'true'},body:blob});
+ const body=await response.text();if(!response.ok)throw new Error('Wysyłanie zdjęcia · HTTP '+response.status+' · '+body.slice(0,300));
+}
+async function storageDownload(ctx,path){
+ const response=await fetch(storageObjectUrl(ctx,path,'authenticated'),{headers:{apikey:ctx.key,Authorization:'Bearer '+ctx.token}});
+ if(!response.ok){const body=await response.text();throw new Error('Pobieranie zdjęcia · HTTP '+response.status+' · '+body.slice(0,240));}
+ return response.blob();
+}
+async function storageDelete(ctx,path){
+ const response=await fetch(ctx.url+'/storage/v1/object/fsm-product-images',{method:'DELETE',headers:{apikey:ctx.key,Authorization:'Bearer '+ctx.token,'Content-Type':'application/json'},body:JSON.stringify({prefixes:[path]})});
+ const body=await response.text();if(!response.ok)throw new Error('Usuwanie zdjęcia · HTTP '+response.status+' · '+body.slice(0,240));
+}
+async function syncProductImages(ctx,remoteProducts){
+ const ownerId=await cloudOwnerId(ctx),remoteMeta=await ctx.getAll('product_images?select=id,owner_id,product_id,storage_path,file_name,file_hash,updated_at&order=updated_at.desc','Odczyt metadanych zdjęć');
+ const byRemoteProduct=new Map();for(const row of remoteMeta)if(!byRemoteProduct.has(row.product_id))byRemoteProduct.set(row.product_id,row);
+ const remoteById=new Map(remoteProducts.map(p=>[String(p.id),p])),remoteByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[String(p.cn_code),p]));
+ let changed=false,uploaded=0,downloaded=0,removed=0;
+ for(const p of data.products){
+  const remoteProduct=remoteById.get(String(p.id))||(p.cnId?remoteByCn.get(String(p.cnId)):null);if(!remoteProduct)continue;
+  const record=byRemoteProduct.get(remoteProduct.id);
+  if(p.imageDeleted){
+   if(record){await storageDelete(ctx,record.storage_path);await ctx.deleteBy('product_images','id',record.id);byRemoteProduct.delete(remoteProduct.id);removed++;}
+   p.image='';p.imageDeleted=false;delete data.sync.productImageHashes[p.id];changed=true;continue;
+  }
+  const hasLocalImage=typeof p.image==='string'&&p.image.startsWith('data:image/');
+  const knownHash=data.sync.productImageHashes[p.id]||'';
+  if(hasLocalImage){
+   const localHash=await fingerprint(p.image);
+   if(record&&record.file_hash===localHash){data.sync.productImageHashes[p.id]=localHash;continue;}
+   if(record&&record.file_hash){
+    if(knownHash&&knownHash===record.file_hash){
+     // Chmura nie zmieniła się od ostatniego syncu, a lokalny obraz tak — wysyłamy lokalną zmianę.
+     const blob=await dataUrlToBlob(p.image),ext=imageMimeExtension(blob.type);if(!ext)throw new Error('Format zdjęcia produktu '+p.name+' nie jest obsługiwany.');
+     const path=ownerId+'/'+remoteProduct.id+'/main.'+ext;await storageUpload(ctx,path,blob);
+     await ctx.postRows('product_images',[{id:record.id,owner_id:ownerId,product_id:remoteProduct.id,storage_path:path,file_name:'main.'+ext,file_hash:localHash,updated_at:new Date().toISOString()}]);
+     record.storage_path=path;record.file_name='main.'+ext;record.file_hash=localHash;data.sync.productImageHashes[p.id]=localHash;uploaded++;
+    }else{
+     // Nieznany konflikt lub nowsza kopia w chmurze: pobieramy zdalny obraz, by nie nadpisać go starą kopią.
+     const downloadedBlob=await storageDownload(ctx,record.storage_path),cloudDataUrl=await blobToDataUrl(downloadedBlob),cloudHash=record.file_hash||await fingerprint(cloudDataUrl);
+     if(knownHash&&knownHash===localHash&&knownHash!==cloudHash){p.image=cloudDataUrl;data.sync.productImageHashes[p.id]=cloudHash;changed=true;downloaded++;}
+     else if(!knownHash){p.image=cloudDataUrl;data.sync.productImageHashes[p.id]=cloudHash;changed=true;downloaded++;}
+     else{p.image=cloudDataUrl;data.sync.productImageHashes[p.id]=cloudHash;changed=true;downloaded++;}
+    }
+   }else if(!record){
+    const blob=await dataUrlToBlob(p.image),mime=blob.type,ext=imageMimeExtension(mime);if(!ext)throw new Error('Format zdjęcia produktu '+p.name+' nie jest obsługiwany.');
+    const path=ownerId+'/'+remoteProduct.id+'/main.'+ext;await storageUpload(ctx,path,blob);
+    const imageId=await stableCloudUuid('fsm-product-image-metadata-v1|'+remoteProduct.id);
+    await ctx.postRows('product_images',[{id:imageId,owner_id:ownerId,product_id:remoteProduct.id,storage_path:path,file_name:'main.'+ext,file_hash:localHash,updated_at:new Date().toISOString()}]);
+    byRemoteProduct.set(remoteProduct.id,{id:imageId,owner_id:ownerId,product_id:remoteProduct.id,storage_path:path,file_name:'main.'+ext,file_hash:localHash});data.sync.productImageHashes[p.id]=localHash;uploaded++;
+   }
+  }else if(record){
+   const blob=await storageDownload(ctx,record.storage_path),dataUrl=await blobToDataUrl(blob);p.image=dataUrl;data.sync.productImageHashes[p.id]=record.file_hash||await fingerprint(dataUrl);changed=true;downloaded++;
+  }
+ }
+ return{uploaded,downloaded,removed,changed};
+}
+function isPurchaseHistoryAction(action){return /zakup/i.test(String(action||''));}
+async function syncInventoryHistory(ctx,remoteProducts,localStockAtStart){
+ const remoteByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[String(p.cn_code),p])),remoteById=new Map(remoteProducts.map(p=>[String(p.id),p]));
+ const historyRows=[],stockRows=[];let idsChanged=false;
+ for(const h of data.history){
+  if(!h.id||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(h.id))){h.id=crypto.randomUUID();idsChanged=true;}
+  const action=String(h.action||'Operacja'),cn=String(h.cnId||''),localProduct=data.products.find(p=>String(p.cnId||'')===cn)||data.products.find(p=>String(p.name||'')===String(h.productName||'')),remoteProduct=(localProduct&&remoteById.get(String(localProduct.id)))||remoteByCn.get(cn);
+  if(isPurchaseHistoryAction(action))continue;
+  const details={fsm_source:'fsm-pwa-v1',productName:String(h.productName||localProduct?.name||'—'),cnId:cn,qty:Number(h.qty)||0,note:String(h.note||''),deviceId:String(data.sync.deviceId||deviceId)};
+  historyRows.push({id:h.id,entity_type:'product',entity_id:remoteProduct?.id||null,action,details,created_at:h.date||new Date().toISOString()});
+  const qty=Number(h.qty)||0;if(!qty||!remoteProduct)continue;
+  if(!Number.isInteger(qty))throw new Error('Operacja „'+action+'” dla '+(h.productName||cn)+' ma ilość '+qty+'. Supabase przechowuje stany w pełnych sztukach; najpierw popraw tę wartość.');
+  let operationType='correction';if(/sprzedaż/i.test(action))operationType='sale';else if(/zużycie własne/i.test(action))operationType='internal_use';else if(/zwrot/i.test(action))operationType='return';else if(/odpad|strat/i.test(action))operationType='waste';
+  const opId=await stableCloudUuid('fsm-stock-history-v1|'+h.id);
+  stockRows.push({id:opId,product_id:remoteProduct.id,operation_type:operationType,quantity_change:qty,unit_price:operationType==='sale'?(Number(localProduct?.retailPrice)||null):(Number(localProduct?.unitCost)||null),reference_id:null,notes:(action+' · '+String(h.note||'')).slice(0,500),client_operation_id:opId,created_at:h.date||new Date().toISOString()});
+ }
+ if(idsChanged)localStorage.setItem(KEY,JSON.stringify(data));
+ if(stockRows.length)await ctx.postRows('stock_operations',stockRows,true);
+ if(historyRows.length)await ctx.postRows('operation_history',historyRows,true);
+ const remoteHistory=await ctx.getAll('operation_history?select=id,entity_type,entity_id,action,details,created_at&order=created_at.asc','Odczyt historii operacji');
+ const known=new Set(data.history.map(h=>String(h.id)));let pulled=0;
+ for(const row of remoteHistory){const details=row.details&&typeof row.details==='object'?row.details:{};if(details.fsm_source!=='fsm-pwa-v1'||known.has(String(row.id)))continue;
+  data.history.push({id:row.id,date:row.created_at||new Date().toISOString(),action:row.action||'Operacja',productName:details.productName||'—',cnId:details.cnId||'—',qty:Number(details.qty)||0,note:details.note||''});known.add(String(row.id));pulled++;
+ }
+ data.history.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+ return{pushed:stockRows.length,pulledHistory:pulled};
+}
+async function syncStockBalance(ctx,remoteProducts,localStockAtStart){
+ const ownerId=await cloudOwnerId(ctx),balance=await ctx.getAll('stock_balance?select=owner_id,product_id,stock_quantity&owner_id=eq.'+encodeURIComponent(ownerId),'Odczyt aktualnych stanów magazynowych');
+ const quantityByProduct=new Map(balance.map(r=>[String(r.product_id),Number(r.stock_quantity)||0]));
+ const remoteByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[String(p.cn_code),p])),remoteById=new Map(remoteProducts.map(p=>[String(p.id),p]));
+ const bootstrap=[];
+ // Jednorazowe, dodatnie uzgodnienie starych lokalnych stanów, których nie opisuje jeszcze żaden dziennik.
+ // Nie obniżamy chmury na podstawie starej kopii z telefonu.
+ for(const p of data.products){const before=localStockAtStart.get(String(p.cnId||''));if(before===undefined||before<=0)continue;const rp=remoteById.get(String(p.id))||remoteByCn.get(String(p.cnId||''));if(!rp)continue;const cloudQty=quantityByProduct.get(String(rp.id))||0,delta=before-cloudQty;if(delta<=0.00001)continue;if(!Number.isInteger(delta))throw new Error('Stan lokalny produktu '+p.name+' wynosi '+before+' szt., a Supabase wymaga całkowitych ilości. Nie wykonano automatycznego uzgodnienia.');const id=await stableCloudUuid('fsm-stock-bootstrap-v1|'+rp.id);bootstrap.push({id,product_id:rp.id,operation_type:'correction',quantity_change:delta,unit_price:null,reference_id:null,notes:'FSM · jednorazowe uzgodnienie stanu istniejącego przed synchronizacją dwukierunkową',client_operation_id:id});}
+ if(bootstrap.length)await ctx.postRows('stock_operations',bootstrap,true);
+ const finalBalance=bootstrap.length?await ctx.getAll('stock_balance?select=owner_id,product_id,stock_quantity&owner_id=eq.'+encodeURIComponent(ownerId),'Ponowny odczyt stanów magazynowych'):balance;
+ const finalByProduct=new Map(finalBalance.map(r=>[String(r.product_id),Number(r.stock_quantity)||0]));
+ for(const p of data.products){const rp=remoteById.get(String(p.id))||remoteByCn.get(String(p.cnId||''));if(!rp)continue;p.stock=finalByProduct.get(String(rp.id))||0;}
+ return{products:data.products.length,stockRows:finalBalance.length,baselineCorrections:bootstrap.length};
+}
 async function syncAllToCloud({automatic=false}={}){
  if(syncInProgress)return false;
  if(!cloudConnected()){if(!automatic)alert('Najpierw połącz FSM z Supabase.');return false}
- if(!automatic&&!confirm('Uruchomić synchronizację katalogu, zakupów, kosztów, dostawców i przyjęć magazynowych? Dokumenty zakupowe i koszty będą wysyłane oraz pobierane. Operacje magazynowe zakupów są dopisywane jako niezmienny dziennik; pozostałe rozchody i sprzedaż pozostają poza synchronizacją. Zalecany eksport kopii przed kontynuacją.'))return false;
+ if(!automatic&&!confirm('Uruchomić pełną synchronizację katalogu, zdjęć, stanów magazynowych, zakupów, kosztów i historii? Supabase będzie wspólnym źródłem stanów. Operacje magazynowe są dopisywane do niezmiennego dziennika. Zalecany eksport kopii przed kontynuacją.'))return false;
  syncInProgress=true;let btn=document.getElementById('syncAllBtn'),status=document.getElementById('syncDetailStatus'),detail=document.getElementById('syncCloudDetail');
  if(btn){btn.disabled=true;btn.textContent=automatic?'Synchronizacja…':'Synchronizuję…'}
- if(status)status.textContent=automatic?'Automatyczna synchronizacja w toku…':'Synchronizacja katalogu, zakupów i kosztów…';updateAutoSyncIndicator();
- let catalogOk=false,supplierOk=false,purchaseResult=null,expenseResult=null,error=null,ctx=null;
- try{catalogOk=await syncCatalogToCloud();}catch(e){error=e;if(status)status.textContent='Błąd katalogu: '+e.message;}
- try{ctx=await cloudApiContext();const suppliers=await syncSuppliersToCloud(ctx);supplierOk=true;purchaseResult=await syncPurchasesToCloud(ctx,suppliers); }catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd zakupów/dostawców: '+e.message;}
- try{if(ctx&&supplierOk)expenseResult=await syncExpensesToCloud();else if(!ctx){expenseResult=await syncExpensesToCloud();}}catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd kosztów: '+e.message;}
- const purchaseOk=!!purchaseResult,expenseOk=!!expenseResult;
- if(catalogOk&&supplierOk&&purchaseOk&&expenseOk){const stamp=new Date().toLocaleTimeString('pl-PL');if(status)status.textContent='Synchronizacja zakończona · katalog, zakupy i koszty · '+stamp;if(detail)detail.textContent='Konto: '+(oauthStore.getItem('fsm_sb_user_label')||'GitHub')+' · katalog + zakupy + koszty · auto-sync 10 s';}
- else{const message=error?.message||'Nie udało się zsynchronizować wszystkich danych.';if(status)status.textContent='Synchronizacja częściowa / błąd: '+message;if(detail)detail.textContent='Sprawdź połączenie Supabase i ponów synchronizację.';if(!automatic)alert('Synchronizacja nie została w pełni zakończona.\n'+message+'\n\nDane lokalne pozostają zachowane.');}
+ if(status)status.textContent=automatic?'Automatyczna synchronizacja w toku…':'Synchronizuję katalog, zdjęcia i magazyn…';updateAutoSyncIndicator();
+ const localStockAtStart=new Map(data.products.map(p=>[String(p.cnId||''),Number(p.stock)||0]));
+ let catalogOk=false,supplierOk=false,purchaseOk=false,expenseOk=false,imageOk=false,historyOk=false,stockOk=false,error=null,ctx=null,remoteProducts=[];
+ try{ctx=await cloudApiContext();}catch(e){error=e;}
+ if(ctx){
+  try{const catalog=await syncCatalogToCloud(ctx);remoteProducts=catalog.remoteProducts;catalogOk=true;}catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd katalogu: '+e.message;}
+  try{const suppliers=await syncSuppliersToCloud(ctx);supplierOk=true;const result=await syncPurchasesToCloud(ctx,suppliers);purchaseOk=!!result;}catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd zakupów/dostawców: '+e.message;}
+  if(catalogOk){try{const result=await syncProductImages(ctx,remoteProducts);imageOk=true; if(result.changed){} }catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd zdjęć: '+e.message;}}
+  if(catalogOk){try{await syncInventoryHistory(ctx,remoteProducts,localStockAtStart);historyOk=true;}catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd historii/operacji magazynowych: '+e.message;}}
+  if(catalogOk&&historyOk&&purchaseOk){try{await syncStockBalance(ctx,remoteProducts,localStockAtStart);stockOk=true;}catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd pobierania stanów: '+e.message;}}
+  try{const result=await syncExpensesToCloud();expenseOk=!!result;}catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd kosztów: '+e.message;}
+ }
+ const allOk=catalogOk&&supplierOk&&purchaseOk&&expenseOk&&imageOk&&historyOk&&stockOk;
+ if(allOk){const stamp=new Date().toLocaleTimeString('pl-PL');if(status)status.textContent='Synchronizacja zakończona · katalog, zdjęcia, magazyn, zakupy i koszty · '+stamp;if(detail)detail.textContent='Konto: '+(oauthStore.getItem('fsm_sb_user_label')||'GitHub')+' · katalog + zdjęcia + magazyn + zakupy + koszty · auto-sync 10 s';data.sync.lastSync=new Date().toISOString();data.sync.status='synced';save();}
+ else{const message=error?.message||'Nie udało się zsynchronizować wszystkich danych.';if(status)status.textContent='Synchronizacja częściowa / błąd: '+message;if(detail)detail.textContent='Sprawdź konfigurację Supabase Storage i ponów synchronizację.';localStorage.setItem(KEY,JSON.stringify(data));if(!automatic)alert('Synchronizacja nie została w pełni zakończona.\n'+message+'\n\nDane lokalne pozostają zachowane.');}
  if(btn){btn.disabled=false;btn.textContent='Synchronizuj teraz'}syncInProgress=false;resetAutoSyncClock();
- return catalogOk&&supplierOk&&purchaseOk&&expenseOk;
+ return allOk;
 }
 // Wspolny licznik i auto-sync: pasek odlicza do kolejnej synchronizacji co 10 sekund.
 try{setSyncPanelCollapsed(localStorage.getItem('fsm_sync_panel_collapsed')==='1')}catch(e){setSyncPanelCollapsed(false)}
