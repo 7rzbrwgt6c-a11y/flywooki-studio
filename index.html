@@ -350,6 +350,51 @@ select option{background:#191d21;color:#edf3f6}
 @media(max-width:700px){.sync-compact{width:100%;margin:7px 0 2px;padding:8px 10px 7px}.sync-server-art{height:78px;max-width:260px;align-self:center}.sync-cycle-track{max-width:none}.sync-collapse-btn{flex-basis:24px}}
 @media(prefers-reduced-motion:reduce){.sync-server-led,.sync-server-art .server-halo,.sync-server-art .server-data-packet,.sync-server-art .server-fan path,.sync-cycle-track i{animation:none!important;transition:none!important}}
 
+/* FSM Data Core — holograficzny rdzeń synchronizacji w kompaktowym module nawigacji. */
+.sync-server-art.data-core-art{height:98px;filter:drop-shadow(0 0 7px #00c9e928)}
+.data-core-art .core-frame{fill:#07111755;stroke:#00c9e94d;stroke-width:.8;stroke-dasharray:2 5}
+.data-core-art .core-frame-inner{fill:none;stroke:#7896a344;stroke-width:.7;stroke-dasharray:1.5 4}
+.data-core-art .core-tick{fill:none;stroke:#ff941f;stroke-width:1;opacity:.75;filter:drop-shadow(0 0 2px #ff941f)}
+.data-core-art .core-orbit{fill:none;stroke:#00c9e92b;stroke-width:.8;stroke-dasharray:2 5}
+.data-core-art .core-orbit-a{stroke:#00d5e94c;stroke-dasharray:1 4}
+.data-core-art .core-orbit-b,.data-core-art .core-orbit-c{stroke:#00c9e936;stroke-dasharray:3 5}
+.data-core-art .core-orbit-spin{transform-box:fill-box;transform-origin:center;animation:dataCoreSpin 13s linear infinite}
+.data-core-art .core-orbit-line{fill:none;stroke:url(#dataCoreStroke);stroke-width:1.15;stroke-dasharray:18 7 3 8;filter:url(#dataCoreSoftGlow)}
+.data-core-art .core-orbit-node{fill:#9cfaff;filter:drop-shadow(0 0 3px #00d9f4)}
+.data-core-art .core-node-amber{fill:#ff9a32;filter:drop-shadow(0 0 3px #ff8617)}
+.data-core-art .core-hex-rotor{transform-box:fill-box;transform-origin:center;animation:dataCoreSpin 19s linear infinite}
+.data-core-art .core-hex{fill:#07151d66;stroke:#00c9e9;stroke-width:1.2;filter:url(#dataCoreSoftGlow)}
+.data-core-art .core-hex-dash{fill:none;stroke:#9ffaff;stroke-width:.65;stroke-dasharray:3 3;opacity:.72}
+.data-core-art .core-circuit{fill:none;stroke:#00c9e9a8;stroke-width:1;stroke-linecap:square}
+.data-core-art .core-inner-rotor{transform-box:fill-box;transform-origin:center;animation:dataCoreSpinReverse 8s linear infinite}
+.data-core-art .core-inner-hex{fill:#0a2029a8;stroke:#ff9a32;stroke-width:.85;opacity:.95}
+.data-core-art .core-inner-lines{fill:none;stroke:#ffb15b;stroke-width:.65;opacity:.75}
+.data-core-art .core-aura{opacity:.78;animation:dataCoreAura 3.1s ease-in-out infinite}
+.data-core-art .core-pulse-ring{fill:none;stroke:#a8fbff;stroke-width:.8;stroke-dasharray:2 3;opacity:.8;transform-box:fill-box;transform-origin:center;animation:dataCorePulse 2.4s ease-out infinite}
+.data-core-art .core-nucleus{fill:#0b303b;stroke:#00d9f4;stroke-width:1.15;filter:url(#dataCoreSoftGlow)}
+.data-core-art .core-nucleus-inner{fill:#0b1b21;stroke:#ff9a32;stroke-width:.7}
+.data-core-art .core-center{fill:#bafaff;filter:url(#dataCoreBlur);animation:dataCoreCenter 2.2s ease-in-out infinite}
+.data-core-art .core-center-glint{fill:#fff;opacity:.9}
+.data-core-art .core-data-path{fill:none;stroke:#264c58;stroke-width:1}
+.data-core-art .core-data-packet{fill:none;stroke:#72f5ff;stroke-width:1.6;stroke-linecap:round;stroke-dasharray:2 18;filter:url(#dataCoreSoftGlow);animation:dataCoreFlow 1.45s linear infinite}
+.data-core-art .core-foot-label{fill:none;stroke:#ff941f;stroke-width:.8;opacity:.65}
+.fui-sidebar.is-syncing .data-core-art .core-hex-rotor{animation-duration:3.5s}
+.fui-sidebar.is-syncing .data-core-art .core-inner-rotor{animation-duration:2.2s}
+.fui-sidebar.is-syncing .data-core-art .core-data-packet{animation-duration:.42s;stroke:#ffb15b;stroke-width:2}
+.fui-sidebar.is-syncing .data-core-art .core-aura{animation-duration:.75s;opacity:1}
+.fui-sidebar.is-offline .data-core-art .core-data-packet{animation-play-state:paused;opacity:.15}
+.fui-sidebar.is-offline .data-core-art .core-orbit-line,.fui-sidebar.is-offline .data-core-art .core-hex{stroke:#71818a;filter:none}
+.fui-sidebar.is-offline .data-core-art .core-center{fill:#829099;filter:none}
+@keyframes dataCoreSpin{to{transform:rotate(360deg)}}
+@keyframes dataCoreSpinReverse{to{transform:rotate(-360deg)}}
+@keyframes dataCoreFlow{to{stroke-dashoffset:-80}}
+@keyframes dataCorePulse{0%{transform:scale(.72);opacity:.85}100%{transform:scale(1.55);opacity:0}}
+@keyframes dataCoreAura{0%,100%{opacity:.52}50%{opacity:.95}}
+@keyframes dataCoreCenter{0%,100%{opacity:.75}50%{opacity:1}}
+@media(max-width:700px){.sync-server-art.data-core-art{height:84px}}
+@media(prefers-reduced-motion:reduce){.data-core-art .core-orbit-spin,.data-core-art .core-hex-rotor,.data-core-art .core-inner-rotor,.data-core-art .core-pulse-ring,.data-core-art .core-aura,.data-core-art .core-center,.data-core-art .core-data-packet{animation:none!important;transition:none!important}}
+
+
 .doc-preview-btn{padding:6px 10px!important;font-size:10px!important;white-space:nowrap}
 .doc-preview-dialog{max-width:980px!important}
 .doc-preview-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 16px;padding-bottom:12px;border-bottom:1px solid #354d58}
@@ -360,6 +405,14 @@ select option{background:#191d21;color:#edf3f6}
 .doc-preview-total{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding:12px 14px;border:1px solid #536772;background:linear-gradient(100deg,#161d20,#0c1012)}.doc-preview-total span{color:#93a8b0;font-size:9px;letter-spacing:1.2px}.doc-preview-total strong{color:#ff9b2f;font-size:20px}
 .existing-image-note{display:block;color:#00c9e9;font-size:8px;margin-top:3px}
 @media(max-width:700px){.doc-preview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.doc-preview-head{align-items:flex-start;flex-direction:column}.doc-preview-total strong{font-size:17px}}
+
+/* Compact backup controls in the synchronization dock */
+.sidebar-sync .sidebar-backup-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px;width:100%;margin:0}
+.sidebar-sync .sidebar-backup-actions .sync-mini-btn{width:100%;min-height:25px;margin:0;padding:4px 5px!important;background:transparent!important;border:1px solid #465a64!important;color:#aebfc6!important;font-size:8px!important;font-weight:650;letter-spacing:.8px;line-height:1.1;clip-path:polygon(0 0,calc(100% - 5px) 0,100% 5px,100% 100%,5px 100%,0 calc(100% - 5px));box-shadow:inset 0 0 8px #00c9e908!important;transition:border-color .15s,color .15s,background .15s}
+.sidebar-sync .sidebar-backup-actions .sync-mini-btn span{font-size:10px;color:#ff9b32;margin-right:4px}
+.sidebar-sync .sidebar-backup-actions .sync-mini-btn:hover{color:#effaff!important;border-color:#00c9e9!important;background:#10212a!important}
+.sidebar-sync .sidebar-sync-actions #syncAllBtn{width:100%}
+@media(max-width:700px){.sidebar-sync .sidebar-sync-actions{display:flex;flex-wrap:wrap}.sidebar-sync .sidebar-backup-actions{flex:1 1 100%;order:2}.sidebar-sync .sidebar-sync-actions #syncAllBtn{flex:1 1 100%;order:1}.sidebar-sync .sidebar-sync-actions #syncDisconnect{flex:1 1 100%;order:3}}
 </style>
 </head>
 <body class="fui-mode">
@@ -370,8 +423,6 @@ select option{background:#191d21;color:#edf3f6}
   </div>
   <div class="head-actions fui-head-actions">
     <button class="secondary" id="supabaseBtn" title="Logowanie / Supabase">CHMURA</button>
-    <button class="secondary" id="exportBtn" title="Eksport kopii">EKSPORT</button>
-    <button class="secondary" id="importBtn" title="Import kopii">IMPORT</button>
     <input id="fileInput" type="file" accept="application/json" class="hide">
   </div>
 </header>
@@ -396,35 +447,81 @@ select option{background:#191d21;color:#edf3f6}
         <p id="syncCloudDetail"></p>
         <div class="sidebar-sync-actions">
           <button id="syncAllBtn" class="hide">Synchronizuj teraz</button>
+          <div class="sidebar-backup-actions" aria-label="Kopia danych">
+            <button type="button" class="sync-mini-btn" id="importBtn" title="Import kopii danych"><span aria-hidden="true">↓</span> IMPORT</button>
+            <button type="button" class="sync-mini-btn" id="exportBtn" title="Eksport kopii danych"><span aria-hidden="true">↑</span> EKSPORT</button>
+          </div>
           <button id="syncDisconnect" class="secondary hide">Wyloguj</button>
         </div>
       </div>
     </section>
 
     <button type="button" id="syncCompact" class="sync-compact" aria-label="Rozwiń panel synchronizacji" title="Otwórz szczegóły synchronizacji">
-      <span class="sync-server-caption"><i class="sync-server-led"></i><b>SYNC SERVER</b><small id="syncCompactMode">AUTO / ONLINE</small></span>
-      <svg class="sync-server-art" viewBox="0 0 190 116" role="img" aria-label="Animowany moduł serwerowy">
+      <span class="sync-server-caption"><i class="sync-server-led"></i><b>DATA CORE</b><small id="syncCompactMode">AUTO / ONLINE</small></span>
+      <svg class="sync-server-art data-core-art" viewBox="0 0 190 116" role="img" aria-label="Holograficzny Data Core – rdzeń synchronizacji">
         <defs>
-          <linearGradient id="syncMetal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#252d32"/><stop offset=".5" stop-color="#11171b"/><stop offset="1" stop-color="#080b0d"/></linearGradient>
-          <filter id="syncGlow"><feGaussianBlur stdDeviation="2.2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <radialGradient id="dataCoreGlow">
+            <stop offset="0" stop-color="#bafaff" stop-opacity=".95"/>
+            <stop offset=".22" stop-color="#00d9f4" stop-opacity=".7"/>
+            <stop offset=".62" stop-color="#00aeca" stop-opacity=".17"/>
+            <stop offset="1" stop-color="#00aeca" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="dataCoreStroke" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#b7fbff"/>
+            <stop offset=".48" stop-color="#00c9e9"/>
+            <stop offset="1" stop-color="#ff941f"/>
+          </linearGradient>
+          <linearGradient id="dataCoreAmber" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#ff8617" stop-opacity=".12"/>
+            <stop offset=".5" stop-color="#ff9d38"/>
+            <stop offset="1" stop-color="#ff8617" stop-opacity=".12"/>
+          </linearGradient>
+          <filter id="dataCoreBlur" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="3.2" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="dataCoreSoftGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="1.4" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
         </defs>
-        <path class="server-halo" d="M25 15H157L169 27V91H25Z"/>
-        <path class="server-shell" d="M29 17H155L166 28V88H29Z" fill="url(#syncMetal)"/>
-        <path class="server-rail" d="M36 22V83M158 25V83"/>
-        <g class="server-slot">
-          <path d="M43 29H151V48H43Z"/><path d="M43 54H151V73H43Z"/>
+        <!-- Outer holographic projection frame -->
+        <path class="core-frame" d="M95 7 151 39V72L95 105 39 72V39Z"/>
+        <path class="core-frame-inner" d="M95 15 143 43V68L95 96 47 68V43Z"/>
+        <path class="core-tick" d="M95 3V13M95 97V109M33 55H45M145 55H157M51 28l7 4M132 78l7 4M139 28l-7 4M58 78l-7 4"/>
+        <!-- Orbital field -->
+        <ellipse class="core-orbit core-orbit-a" cx="95" cy="55" rx="66" ry="18"/>
+        <ellipse class="core-orbit core-orbit-b" cx="95" cy="55" rx="56" ry="27" transform="rotate(-34 95 55)"/>
+        <ellipse class="core-orbit core-orbit-c" cx="95" cy="55" rx="56" ry="27" transform="rotate(34 95 55)"/>
+        <g class="core-orbit-spin">
+          <ellipse class="core-orbit-line" cx="95" cy="55" rx="61" ry="12"/>
+          <circle class="core-orbit-node" cx="34" cy="55" r="2.6"/>
+          <circle class="core-orbit-node core-node-amber" cx="156" cy="55" r="2.1"/>
         </g>
-        <g class="server-screw"><circle cx="37" cy="30" r="1.7"/><circle cx="37" cy="77" r="1.7"/><circle cx="158" cy="30" r="1.7"/><circle cx="158" cy="77" r="1.7"/></g>
-        <g class="server-activity" filter="url(#syncGlow)">
-          <circle cx="52" cy="38.5" r="2.2"/><circle cx="60" cy="38.5" r="2.2"/>
-          <circle cx="52" cy="63.5" r="2.2"/><circle cx="60" cy="63.5" r="2.2"/>
-          <path class="server-data-line" d="M72 38.5H139M72 63.5H139"/>
-          <path class="server-data-packet" d="M72 38.5H139M72 63.5H139"/>
+        <!-- Layered hexagonal reactor -->
+        <g class="core-hex-rotor">
+          <path class="core-hex" d="M95 23 123 39V71L95 87 67 71V39Z"/>
+          <path class="core-hex-dash" d="M95 29 117 42V68L95 81 73 68V42Z"/>
+          <path class="core-circuit" d="M67 55H55L48 48M123 55H135L142 48M95 23V17M95 87V93M77 39 70 32M113 39 120 32M77 71 70 78M113 71 120 78"/>
         </g>
-        <g class="server-fan" transform="translate(139 38.5)"><circle r="6.4"/><path d="M0-5L2-1 0 0 -2-1Z M5 0L1 2 0 0 1-2Z M0 5L-2 1 0 0 2 1Z M-5 0L-1-2 0 0 -1 2Z"/></g>
-        <g class="server-fan server-fan-lower" transform="translate(139 63.5)"><circle r="6.4"/><path d="M0-5L2-1 0 0 -2-1Z M5 0L1 2 0 0 1-2Z M0 5L-2 1 0 0 2 1Z M-5 0L-1-2 0 0 -1 2Z"/></g>
-        <path class="server-base" d="M22 91H173L167 98H28Z"/>
-        <path class="server-base-light" d="M40 94H154"/>
+        <g class="core-inner-rotor">
+          <path class="core-inner-hex" d="M95 35 112 45V65L95 75 78 65V45Z"/>
+          <path class="core-inner-lines" d="M95 35V43M112 45l-7 4M112 65l-7-4M95 75V67M78 65l7-4M78 45l7 4"/>
+        </g>
+        <!-- Core light and pulsing data nucleus -->
+        <circle class="core-aura" cx="95" cy="55" r="27" fill="url(#dataCoreGlow)" filter="url(#dataCoreBlur)"/>
+        <circle class="core-pulse-ring" cx="95" cy="55" r="16"/>
+        <path class="core-nucleus" d="M95 39 108 47V63L95 71 82 63V47Z"/>
+        <path class="core-nucleus-inner" d="M95 44 104 49.5V60.5L95 66 86 60.5V49.5Z"/>
+        <circle class="core-center" cx="95" cy="55" r="4.2"/>
+        <circle class="core-center-glint" cx="93.5" cy="53.5" r="1.25"/>
+        <!-- Data pulses travelling through the core -->
+        <path class="core-data-path" d="M42 55H72M118 55H148M95 9V30M95 80V101"/>
+        <path class="core-data-packet" d="M42 55H72M118 55H148M95 9V30M95 80V101"/>
+        <g class="core-foot-label">
+          <path d="M70 111H120"/>
+          <circle cx="64" cy="111" r="1.2"/><circle cx="126" cy="111" r="1.2"/>
+        </g>
       </svg>
       <span class="sync-cycle-label"><span id="syncCycleText">AUTO SYNC · 10 S</span><b id="syncCycleRemaining">10s</b></span>
       <span class="sync-cycle-track"><i id="syncCycleBar"></i></span>
