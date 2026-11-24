@@ -211,6 +211,96 @@ input,select,textarea{border-radius:0!important;background:#07121a!important;bor
 @media(max-width:1050px){.finance-summary-grid{grid-template-columns:1fr}.finance-summary-body{grid-template-columns:minmax(150px,.7fr) minmax(0,1.3fr)}}
 @media(max-width:600px){.finance-period-toolbar{justify-content:space-between;gap:8px}.finance-period-tabs{gap:3px}.finance-period-btn{padding:6px 7px!important;font-size:8px!important}.finance-summary-panel{padding:12px 10px 10px!important}.finance-summary-body{grid-template-columns:112px minmax(0,1fr);gap:9px;min-height:0}.finance-pie{width:122px}.finance-total strong{font-size:19px}.finance-kpis{gap:5px}.finance-kpis>div{padding:6px}.finance-kpis b{font-size:11px}.finance-legend-row,.finance-legend-row b{font-size:8px}}
 @media(max-width:370px){.finance-summary-body{grid-template-columns:1fr}.finance-chart-area{max-height:120px}.finance-pie{width:125px}.finance-data-area{width:100%}}
+
+
+/* FSM FUI v2 — neutral black surface refresh; accents and interface character preserved. */
+:root{
+  --bg:#000000;
+  --card:#101214;
+  --ink:#eaf2f6;
+  --muted:#8ca2af;
+  --line:#30363c;
+  --fui-panel:#0b0d0f;
+}
+html,body,body.fui-mode{
+  background:#000000!important;
+  background-image:none!important;
+}
+.fui-topbar{
+  background:linear-gradient(105deg,#050505 0%,#101112 48%,#040404 100%)!important;
+  border-bottom-color:#454b50!important;
+}
+.fui-sidebar{
+  background:linear-gradient(180deg,#070809 0%,#0c0e10 60%,#050606 100%)!important;
+  border-right-color:#30363c!important;
+}
+.fui-workspace,.fui-shell,#app{background:transparent!important}
+.fui-nav button{
+  background:linear-gradient(110deg,#171a1d,#0d0f11)!important;
+  border-color:#41484e!important;
+}
+.fui-nav button.active{
+  background:linear-gradient(100deg,#a64f0b,#3d2a19 72%,#17191b)!important;
+}
+.sidebar-spool{
+  background:linear-gradient(180deg,#111416,#080a0b)!important;
+  border-color:#3a4248!important;
+}
+.fui-stat,.panel,.metric,.categoryCard,.dialog,.syncDetails{
+  background:linear-gradient(145deg,#121517 0%,#090b0d 100%)!important;
+}
+.fui-panel,.fui-panel:has(.fui-bars),.fui-panel:has(.fui-donut){
+  background:linear-gradient(145deg,#131618 0%,#0b0d0f 64%,#070809 100%)!important;
+}
+.fui-stat{border-color:#343a40!important}
+.fui-panel-head{border-bottom-color:#343a40!important}
+.fui-table th,.table-wrap th{
+  background:linear-gradient(90deg,#181b1e,#101214)!important;
+}
+.fui-table td,.table-wrap td{border-bottom-color:#292f34!important}
+.fui-table tbody tr:nth-child(even){background:#141719a8!important}
+.fui-table tbody tr:hover{background:#1c2024!important}
+.fui-table .fui-empty,.fui-empty{background:#0d0f11!important}
+.fui-secondary-action,button.secondary{
+  background:linear-gradient(120deg,#1b1f22,#0d0f11)!important;
+}
+.syncDock .syncToggle{
+  background:#111719!important;
+  border-color:#4b6875!important;
+}
+.syncDetails{
+  background:linear-gradient(145deg,#121719,#090b0d)!important;
+}
+.dialog footer{background:#0a0c0e!important}
+.notice{background:#171a1d!important}
+.categoryCard{background:linear-gradient(145deg,#141719,#0b0d0f)!important}
+
+/* Input surfaces intentionally sit one step above the black panels for legibility. */
+input,select,textarea{
+  background:#191d21!important;
+  color:#edf3f6!important;
+  border:1px solid #424a51!important;
+}
+input::placeholder,textarea::placeholder{color:#8e9aa3!important;opacity:1}
+input:focus,select:focus,textarea:focus{
+  background:#1d2226!important;
+  border-color:var(--cyan)!important;
+  outline:1px solid var(--cyan)!important;
+  box-shadow:0 0 9px #00c9e92e!important;
+}
+select option{background:#191d21;color:#edf3f6}
+
+/* Keep HUD chart accents, while changing only their dark backing surfaces. */
+.fui-bars .chart-plot-bg{stroke:#3e484f!important}
+.fui-bars .grid-line{stroke:#3a454c!important}
+.fui-bars .bar-bg{fill:#1a2024!important;stroke:#3c484f!important}
+.fui-bars .bar-value{stroke:#080a0b!important}
+.fui-donut .donut-hud-back{fill:#121619!important;stroke:#3d484f!important}
+.fui-donut .donut-hud-track{stroke:#59656c!important}
+.fui-donut .donut-base{stroke:#252c31!important}
+.fui-donut .donut-center-fill{fill:#0e1113!important;stroke:#465159!important}
+.fui-legend-row{border-bottom-color:#343b40!important}
+
 </style>
 </head>
 <body class="fui-mode">
