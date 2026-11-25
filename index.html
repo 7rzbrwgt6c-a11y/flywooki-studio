@@ -421,6 +421,8 @@ select option{background:#191d21;color:#edf3f6}
 
 /* Sales / outflow document issuing — document layout inspired by the supplied reference. */
 .sales-doc-action-wrap{position:relative;z-index:8}
+/* Keep the issuing dropdown above the register table within the framed sales panel. */
+.sales-register > .split:first-of-type{position:relative!important;z-index:20!important}
 .sales-doc-menu{position:absolute;right:0;top:calc(100% + 7px);width:245px;padding:6px;background:linear-gradient(145deg,#151a1e,#080b0d);border:1px solid #52636b;box-shadow:0 14px 34px #000b;z-index:30;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%)}
 .sales-doc-menu button{display:flex;width:100%;flex-direction:column;align-items:flex-start;gap:1px;margin:0;padding:10px 12px;background:transparent!important;color:#e5edf1!important;border:0!important;border-bottom:1px solid #29353c!important;text-align:left;clip-path:none!important}
 .sales-doc-menu button:last-child{border-bottom:0!important}.sales-doc-menu button:hover{background:#1b2b33!important;color:#ff9b32!important}.sales-doc-menu button b{font-size:11px;letter-spacing:1px}.sales-doc-menu button small{font-size:10px;color:#80949e;font-weight:400}
