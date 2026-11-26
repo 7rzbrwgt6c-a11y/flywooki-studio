@@ -566,7 +566,7 @@ body.fsm-authenticated #fsmLoginGate{display:none!important}
         <button id="fsmLoginSubmit" type="submit" class="fsm-login-submit">ZALOGUJ <span aria-hidden="true">↗</span></button>
       </form>
       <button type="button" id="fsmGitHubSetup" class="fsm-login-github">PIERWSZE USTAWIENIE HASŁA / ODZYSKANIE DOSTĘPU PRZEZ GITHUB</button>
-      <p class="fsm-login-help">Login <b>admin</b> jest przypisany do konta administratora. Hasło sprawdza Supabase Auth.</p>
+      <p class="fsm-login-help">Login <b>admin</b> jest aliasem istniejącego konta FSM. Hasło weryfikuje Supabase Auth; dane i identyfikator użytkownika pozostają bez zmian.</p>
     </div>
     <div id="fsmPasswordSetupView" class="hide">
       <h1>USTAW HASŁO ADMINISTRATORA</h1>
@@ -578,7 +578,7 @@ body.fsm-authenticated #fsmLoginGate{display:none!important}
         <input id="fsmInitialPasswordConfirm" name="confirmPassword" type="password" value="admin" autocomplete="new-password" required>
         <button id="fsmPasswordSetupSubmit" type="submit" class="fsm-login-submit">ZAPISZ HASŁO <span aria-hidden="true">↗</span></button>
       </form>
-      <p class="fsm-login-help">„admin” jest hasłem tymczasowym i bardzo łatwym do odgadnięcia. Zalecam ustawienie mocniejszego hasła. Supabase może również wymagać minimalnej długości zgodnej z ustawieniami projektu.</p>
+      <p class="fsm-login-help">Hasło zostanie zapisane na tym samym, istniejącym koncie Supabase, które ma dostęp do magazynu. Zalecam wybrać hasło mocniejsze niż „admin”. Supabase może wymagać minimum 6 znaków.</p>
       <button type="button" id="fsmCancelPasswordSetup" class="fsm-login-github">ANULUJ I WRÓĆ DO LOGOWANIA</button>
     </div>
     <p id="fsmLoginStatus" class="fsm-login-status" role="status" aria-live="polite">OCZEKIWANIE NA AUTORYZACJĘ</p>
@@ -1298,7 +1298,10 @@ const sbPanel=document.getElementById('sbPanel');
 const oauthStore=localStorage;
 const SUPABASE_URL='https://cgjmsdoeiohzefucxrev.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_e5QX0w2YKc26lj9cXgGcNg_O4RFArNb';
-const FSM_ADMIN_EMAIL='marciniakl@o2.pl';
+// Używamy istniejącego konta Supabase, które ma już dostęp do danych FSM.
+// Dostawca OAuth zwraca dla tej sesji adres Apple Private Relay widoczny na ekranie.
+// Alias aplikacyjny 'admin' loguje się do tego samego użytkownika i zachowuje jego UUID.
+const FSM_ADMIN_EMAIL='7rzbrwgt6c@privaterelay.appleid.com';
 let sessionAuthenticated=false;
 const loginGate=document.getElementById('fsmLoginGate');
 const loginStatus=document.getElementById('fsmLoginStatus');
@@ -1367,7 +1370,7 @@ async function verifyCloudSession(session,{showPasswordSetup=false}={}){
   if(showPasswordSetup){
    sessionAuthenticated=false;document.body.classList.remove('fsm-authenticated');loginGate?.classList.remove('hide');
    document.getElementById('fsmLoginView')?.classList.add('hide');document.getElementById('fsmPasswordSetupView')?.classList.remove('hide');
-   const initial=document.getElementById('fsmInitialPassword'),confirm=document.getElementById('fsmInitialPasswordConfirm');if(initial)initial.value='admin';if(confirm)confirm.value='admin';
+   const initial=document.getElementById('fsmInitialPassword'),confirm=document.getElementById('fsmInitialPasswordConfirm');if(initial)initial.value='admin123';if(confirm)confirm.value='admin123';
    setLoginMessage('KONTO POTWIERDZONE. USTAW HASŁO DLA LOGINU ADMIN.','success');
    return true;
   }
@@ -1418,6 +1421,7 @@ async function saveInitialAdminPassword(event){
  event?.preventDefault();
  const password=String(document.getElementById('fsmInitialPassword')?.value||''),confirmPassword=String(document.getElementById('fsmInitialPasswordConfirm')?.value||'');
  if(!password){setLoginMessage('Wpisz nowe hasło.','error');return;}
+ if(password.length<6){setLoginMessage('Hasło musi mieć co najmniej 6 znaków. Użyj np. admin123 i ustaw mocniejsze po pierwszym logowaniu.','error');return;}
  if(password!==confirmPassword){setLoginMessage('Podane hasła nie są identyczne.','error');return;}
  const accessToken=oauthStore.getItem('fsm_sb_access_token');if(!accessToken){setLoginMessage('Sesja GitHub wygasła. Rozpocznij pierwszą konfigurację ponownie.','error');showLoginView();return;}
  const submit=document.getElementById('fsmPasswordSetupSubmit');if(submit){submit.disabled=true;submit.textContent='ZAPISYWANIE…';}
