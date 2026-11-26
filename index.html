@@ -1713,7 +1713,7 @@ async function syncProductImages(ctx,remoteProducts){
 function isPurchaseHistoryAction(action){return /zakup/i.test(String(action||''));}
 async function syncInventoryHistory(ctx,remoteProducts,localStockAtStart){
  const remoteByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[String(p.cn_code),p])),remoteById=new Map(remoteProducts.map(p=>[String(p.id),p]));
- const historyRows=[],stockRows=[];let idsChanged=false;
+ const historyRows=[],stockRows=[],historyIdByStockOpId=new Map();let idsChanged=false;
  for(const h of data.history){
   if(!h.id||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(h.id))){h.id=crypto.randomUUID();idsChanged=true;}
   const action=String(h.action||'Operacja'),cn=String(h.cnId||''),localProduct=data.products.find(p=>String(p.cnId||'')===cn)||data.products.find(p=>String(p.name||'')===String(h.productName||'')),remoteProduct=(localProduct&&remoteById.get(String(localProduct.id)))||remoteByCn.get(cn);
@@ -1724,15 +1724,39 @@ async function syncInventoryHistory(ctx,remoteProducts,localStockAtStart){
   if(!Number.isInteger(qty))throw new Error('Operacja „'+action+'” dla '+(h.productName||cn)+' ma ilość '+qty+'. Supabase przechowuje stany w pełnych sztukach; najpierw popraw tę wartość.');
   let operationType='correction';if(/sprzedaż/i.test(action))operationType='sale';else if(/zużycie własne/i.test(action))operationType='internal_use';else if(/zwrot/i.test(action))operationType='return';else if(/odpad|strat/i.test(action))operationType='waste';
   const opId=await stableCloudUuid('fsm-stock-history-v1|'+h.id);
+  historyIdByStockOpId.set(opId,String(h.id));
   stockRows.push({id:opId,product_id:remoteProduct.id,operation_type:operationType,quantity_change:qty,unit_price:operationType==='sale'?(Number(localProduct?.retailPrice)||null):(Number(localProduct?.unitCost)||null),reference_id:validDocumentId,notes:(action+' · '+String(h.note||'')).slice(0,500),client_operation_id:opId,created_at:h.date||new Date().toISOString()});
  }
  if(idsChanged)localStorage.setItem(KEY,JSON.stringify(data));
- // Odczyt już zapisanych operacji pozwala nie dublować ruchów i wykryć produkty,
- // które mają już dziennik stanów w chmurze.
- const remoteOps=await ctx.getAll('stock_operations?select=id,client_operation_id,product_id,quantity_change','Odczyt istniejącego dziennika magazynowego');
- const knownIds=new Set();const productsWithLedger=new Set();
- for(const op of remoteOps){if(op.id)knownIds.add(String(op.id));if(op.client_operation_id)knownIds.add(String(op.client_operation_id));if(op.product_id)productsWithLedger.add(String(op.product_id));}
- const pending=stockRows.filter(op=>!knownIds.has(String(op.client_operation_id||op.id)));
+ // Najpierw pobieramy pełny dziennik. Starsze wersje FSM zapisywały id historii
+ // bezpośrednio jako id/client_operation_id ruchu, a nowsze wyliczają UUID z hasha.
+ // Rozpoznajemy obie postacie oraz dokładny odcisk operacji, aby nie odtworzyć
+ // tego samego ruchu pod nowym UUID (trigger BEFORE INSERT odrzuciłby taki duplikat,
+ // gdyby ponowny rozchód sprowadzał stan poniżej zera).
+ const remoteOps=await ctx.getAll('stock_operations?select=id,client_operation_id,product_id,operation_type,quantity_change,reference_id,notes,created_at','Odczyt istniejącego dziennika magazynowego');
+ const remoteByIdentity=new Map(),remoteByFingerprint=new Map(),productsWithLedger=new Set();
+ const normalizeOperationNote=value=>String(value||'').trim().replace(/\s+/g,' ');
+ const operationFingerprint=op=>{const stamp=Date.parse(op.created_at||'');return[String(op.product_id||''),String(op.operation_type||''),String(Number(op.quantity_change)||0),Number.isFinite(stamp)?String(stamp):'',String(op.reference_id||''),normalizeOperationNote(op.notes)].join('\u001f')};
+ for(const op of remoteOps){
+  if(op.id){remoteByIdentity.set(String(op.id),op);}
+  if(op.client_operation_id){if(!remoteByIdentity.has(String(op.client_operation_id)))remoteByIdentity.set(String(op.client_operation_id),op);}
+  if(op.product_id)productsWithLedger.add(String(op.product_id));
+  const fingerprint=operationFingerprint(op);if(!remoteByFingerprint.has(fingerprint))remoteByFingerprint.set(fingerprint,[]);remoteByFingerprint.get(fingerprint).push(op);
+ }
+ const usedRemoteOperations=new Set(),pending=[];let alreadySynced=0;
+ for(const op of stockRows){
+  const legacyHistoryId=historyIdByStockOpId.get(op.id)||'';
+  let existing=remoteByIdentity.get(String(op.id))||remoteByIdentity.get(String(op.client_operation_id||''))||null;
+  if(!existing&&legacyHistoryId)existing=remoteByIdentity.get(legacyHistoryId)||null;
+  if(!existing){const matches=remoteByFingerprint.get(operationFingerprint(op))||[];existing=matches.find(row=>!usedRemoteOperations.has(String(row.id)))||null;}
+  if(existing){
+   const sameProduct=String(existing.product_id)===String(op.product_id),sameType=String(existing.operation_type)===String(op.operation_type),sameQty=Math.abs(Number(existing.quantity_change)-Number(op.quantity_change))<0.000001;
+   if(!sameProduct||!sameType||!sameQty)throw new Error('Wykryto konflikt identyfikatora operacji magazynowej '+String(existing.id)+'. W Supabase istnieje już wpis o innym produkcie, typie lub ilości. Nie wysłano kolejnych ruchów.');
+   usedRemoteOperations.add(String(existing.id));alreadySynced++;
+   continue;
+  }
+  pending.push(op);
+ }
  const pendingNet=new Map();for(const op of pending)pendingNet.set(String(op.product_id),(pendingNet.get(String(op.product_id))||0)+(Number(op.quantity_change)||0));
  // Starsze instalacje mogły mieć stan wpisany ręcznie bez odpowiadającego mu ruchu.
  // Uzupełniamy wyłącznie produkty, które nie mają jeszcze żadnego dziennika w chmurze.
@@ -1778,7 +1802,7 @@ async function syncInventoryHistory(ctx,remoteProducts,localStockAtStart){
   data.history.push({id:row.id,date:row.created_at||new Date().toISOString(),action:row.action||'Operacja',productName:details.productName||'—',cnId:details.cnId||'—',qty:Number(details.qty)||0,note:details.note||'',documentId:details.documentId||null});known.add(String(row.id));pulled++;
  }
  data.history.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
- return{pushed:pending.length+bootstrap.length,pulledHistory:pulled,bootstrap:bootstrap.length};
+ return{pushed:pending.length+bootstrap.length,pulledHistory:pulled,bootstrap:bootstrap.length,alreadySynced};
 }
 async function syncSalesToCloud(ctx){
  const ownerId=await cloudOwnerId(ctx),isUuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v||''));
