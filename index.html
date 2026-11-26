@@ -855,6 +855,27 @@ function salesDocPdfCanvas(doc,pageItems,pageNo,pageCount,logoImage){
   meta.forEach((r,i)=>{const y=by+i*rowH;c.fillStyle='#e9e9e9';c.fillRect(bx,y,labelW,rowH);c.fillStyle='#111111';c.font='700 16px Arial, sans-serif';c.fillText(r[0],bx+9,y+21);fit(r[1],bx+labelW+20,y+21,220,'16px Arial, sans-serif','#111111');});
   c.fillStyle='#e9e9e9';c.fillRect(bx,by+105,495,31);c.fillStyle='#111111';c.font='700 16px Arial, sans-serif';c.fillText('Sprzedawca',bx+10,by+126);
   c.fillStyle='#111111';c.font='18px Arial, sans-serif';const sellerLines=[sellerName,...sellerAddress.split(/\r?\n/).filter(Boolean)];sellerLines.forEach((line,i)=>fit(line,bx+16,by+159+i*22,465,'18px Arial, sans-serif','#111111'));if(sellerNip)fit(`NIP: ${sellerNip}`,bx+16,by+159+sellerLines.length*22,465,'18px Arial, sans-serif','#111111');
+
+  // Dane nabywcy/odbiorcy po lewej, pod logo. Wydruk wykorzystuje dane
+  // wpisane w dokumencie; adres pobiera z kartoteki kontrahentow, gdy istnieje.
+  const isInternal=doc.type==='rw';
+  const customerName=String(doc.customer||'').trim();
+  const customerNip=String(first.customerNip||'').trim();
+  const customerMatch=(data.suppliers||[]).find(s=>
+    (customerNip&&String(s.nip||s.tax_id||'').trim()===customerNip) ||
+    (customerName&&String(s.name||'').trim().toLocaleLowerCase('pl-PL')===customerName.toLocaleLowerCase('pl-PL'))
+  );
+  const buyerTitle=isInternal?'Odbiorca / cel rozchodu':'Nabywca';
+  const buyerName=isInternal?String(doc.recipient||'—').trim():(first.noCustomer||!customerName?'Brak kontrahenta':customerName);
+  const buyerAddress=String(customerMatch?.address||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  const buyerLines=[buyerName];
+  if(!isInternal&&customerNip)buyerLines.push(`NIP: ${customerNip}`);
+  buyerAddress.forEach(line=>buyerLines.push(line));
+  if(!isInternal&&doc.recipient&&doc.recipient!==customerName)buyerLines.push(`Odbiorca: ${doc.recipient}`);
+  const buyerX=M,buyerY=150,buyerW=560;
+  c.fillStyle='#e9e9e9';c.fillRect(buyerX,buyerY,buyerW,31);c.fillStyle='#111111';c.font='700 16px Arial, sans-serif';c.fillText(buyerTitle,buyerX+10,buyerY+21);
+  c.fillStyle='#111111';c.font='18px Arial, sans-serif';buyerLines.slice(0,5).forEach((line,i)=>fit(line,buyerX+16,buyerY+59+i*22,buyerW-30,'18px Arial, sans-serif','#111111'));
+
   const titleY=365;c.fillStyle='#111111';c.font='700 40px Arial, sans-serif';c.fillText(String(doc.typeLabel||'Dokument sprzedaży'),M,titleY);c.font='20px Arial, sans-serif';c.fillText(numberLabel,M,titleY+31);tableY=455;
  }else{
   c.fillStyle='#111111';c.font='700 25px Arial, sans-serif';c.fillText(`${String(doc.typeLabel||'DOKUMENT').toUpperCase()} — CIĄG DALSZY`,M,70);c.font='16px Arial, sans-serif';c.fillStyle='#555555';c.fillText(`${numberLabel}  ·  strona ${pageNo+1}/${pageCount}`,M,98);tableY=145;
