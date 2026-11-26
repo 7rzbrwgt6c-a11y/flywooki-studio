@@ -513,16 +513,85 @@ select option{background:#191d21;color:#edf3f6}
 .purchase-register-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:220px}
 .purchase-register-actions .purchase-receipt-btn{font-size:10px;padding:7px 9px;white-space:normal;line-height:1.25}
 .purchase-register-actions .doc-preview-btn{font-size:10px;padding:7px 9px}
+
+/* FSM AUTH GATE — ekran logowania admin przed udostępnieniem interfejsu. */
+.fsm-login-gate{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;overflow:auto;padding:22px;background:radial-gradient(ellipse at 50% 0%,#171b1d 0,#080a0b 48%,#000 100%)}
+.fsm-login-card{position:relative;width:min(430px,100%);padding:28px 30px 19px;background:linear-gradient(145deg,#15191c 0%,#0a0d0f 66%,#050607 100%);border:1px solid #53616a;clip-path:polygon(0 14px,14px 0,calc(100% - 28px) 0,100% 28px,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);box-shadow:0 20px 65px #000b,inset 0 0 28px #00b9d40a}
+.fsm-login-card:before{content:"";position:absolute;left:0;top:0;width:38%;height:2px;background:#ff8617;box-shadow:0 0 12px #ff861788}
+.fsm-login-brand{display:flex;align-items:center;gap:14px;padding-bottom:19px;border-bottom:1px solid #35434a}
+.fsm-login-brand img{width:108px;max-height:52px;object-fit:contain}
+.fsm-login-brand>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fsm-login-brand strong{font-size:14px;color:#edf3f6;letter-spacing:1.5px;white-space:nowrap}
+.fsm-login-brand small{font-size:8px;color:#8298a3;letter-spacing:2px}
+.fsm-login-rule{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:17px 0 26px;color:#80929c;font-size:8px;letter-spacing:1.5px}
+.fsm-login-rule i{width:24px;height:2px;background:#ff8617;box-shadow:0 0 8px #ff8617}
+.fsm-login-rule span{margin-left:auto}
+.fsm-login-card h1{margin:0;color:#eaf1f4;font-size:20px;font-weight:650;letter-spacing:1.4px}
+.fsm-login-subtitle{margin:7px 0 21px;color:#8fa1aa;font-size:11px;line-height:1.6}
+.fsm-login-card label{margin:14px 0 5px;color:#a8b8c0;font-size:9px;font-weight:700;letter-spacing:1.2px}
+.fsm-login-card input{height:43px;margin:0;padding:10px 12px;background:#171c20!important;border:1px solid #46545c!important;color:#f0f4f6!important;font-size:14px;letter-spacing:.5px}
+.fsm-login-card input:focus{border-color:#ff922e!important;outline:1px solid #ff922e!important;box-shadow:0 0 12px #ff861722!important}
+.fsm-login-submit{width:100%;display:flex;align-items:center;justify-content:center;gap:14px;margin-top:22px;padding:13px 15px!important;background:linear-gradient(105deg,#ff9c35,#e86c08)!important;color:#111!important;border:1px solid #ffb15b!important;font-size:11px!important;font-weight:850!important;letter-spacing:1.5px!important;clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%)!important;box-shadow:0 0 16px #ff861728}
+.fsm-login-submit span{font-size:16px}
+.fsm-login-github{width:100%;margin-top:13px;padding:9px 8px!important;background:transparent!important;border:1px solid #46555e!important;color:#9eb0b9!important;font-size:8px!important;letter-spacing:.7px!important;line-height:1.5;clip-path:none!important}
+.fsm-login-github:hover{border-color:#ff922e!important;color:#ffb66e!important}
+.fsm-login-help{margin:14px 0 0;color:#71838c;font-size:9px;line-height:1.6}
+.fsm-login-help b{color:#bac8ce}
+.fsm-login-status{min-height:18px;margin:16px 0 0;padding:8px 9px;border-left:2px solid #426b7a;background:#10181d;color:#8fa7b2;font-size:9px;line-height:1.5;overflow-wrap:anywhere}
+.fsm-login-status.error{border-left-color:#d45d57;color:#ffaaa1}
+.fsm-login-status.success{border-left-color:#00c99d;color:#83e4ca}
+.fsm-login-footer{display:flex;justify-content:space-between;gap:8px;margin-top:17px;padding-top:11px;border-top:1px solid #29343a;color:#586b74;font-size:7px;letter-spacing:1px}
+.fsm-auth-internal{display:none!important}
+body.fsm-authenticated #fsmLoginGate{display:none!important}
+@media(max-width:480px){.fsm-login-gate{padding:14px}.fsm-login-card{padding:23px 19px 16px}.fsm-login-brand img{width:88px}.fsm-login-brand strong{font-size:11px}.fsm-login-card h1{font-size:18px}}
+
 </style>
 </head>
 <body class="fui-mode">
+<div id="fsmLoginGate" class="fsm-login-gate" role="main" aria-label="Logowanie do Flywooki Studio">
+  <section class="fsm-login-card">
+    <div class="fsm-login-brand">
+      <img src="logo-flywooki.png" alt="Flywooki Studio">
+      <div><strong>FLYWOOKI STUDIO</strong><small>INVENTORY CONTROL SYSTEM</small></div>
+    </div>
+    <div class="fsm-login-rule"><i></i><span>SECURE ACCESS / ADMIN</span></div>
+    <div id="fsmLoginView">
+      <h1>PANEL LOGOWANIA</h1>
+      <p class="fsm-login-subtitle">Zaloguj się, aby otworzyć system magazynowy.</p>
+      <form id="fsmLoginForm" autocomplete="on">
+        <label for="fsmLoginName">LOGIN</label>
+        <input id="fsmLoginName" name="username" type="text" value="admin" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+        <label for="fsmLoginPassword">HASŁO</label>
+        <input id="fsmLoginPassword" name="password" type="password" autocomplete="current-password" required>
+        <button id="fsmLoginSubmit" type="submit" class="fsm-login-submit">ZALOGUJ <span aria-hidden="true">↗</span></button>
+      </form>
+      <button type="button" id="fsmGitHubSetup" class="fsm-login-github">PIERWSZE USTAWIENIE HASŁA / ODZYSKANIE DOSTĘPU PRZEZ GITHUB</button>
+      <p class="fsm-login-help">Login <b>admin</b> jest przypisany do konta administratora. Hasło sprawdza Supabase Auth.</p>
+    </div>
+    <div id="fsmPasswordSetupView" class="hide">
+      <h1>USTAW HASŁO ADMINISTRATORA</h1>
+      <p class="fsm-login-subtitle">Konto zostało potwierdzone przez GitHub. Ustaw teraz hasło używane przy logowaniu loginem admin.</p>
+      <form id="fsmPasswordSetupForm">
+        <label for="fsmInitialPassword">NOWE HASŁO</label>
+        <input id="fsmInitialPassword" name="newPassword" type="password" value="admin" autocomplete="new-password" required>
+        <label for="fsmInitialPasswordConfirm">POWTÓRZ HASŁO</label>
+        <input id="fsmInitialPasswordConfirm" name="confirmPassword" type="password" value="admin" autocomplete="new-password" required>
+        <button id="fsmPasswordSetupSubmit" type="submit" class="fsm-login-submit">ZAPISZ HASŁO <span aria-hidden="true">↗</span></button>
+      </form>
+      <p class="fsm-login-help">„admin” jest hasłem tymczasowym i bardzo łatwym do odgadnięcia. Zalecam ustawienie mocniejszego hasła. Supabase może również wymagać minimalnej długości zgodnej z ustawieniami projektu.</p>
+      <button type="button" id="fsmCancelPasswordSetup" class="fsm-login-github">ANULUJ I WRÓĆ DO LOGOWANIA</button>
+    </div>
+    <p id="fsmLoginStatus" class="fsm-login-status" role="status" aria-live="polite">OCZEKIWANIE NA AUTORYZACJĘ</p>
+    <div class="fsm-login-footer"><span>FSM / AUTH GATE</span><span>SUPABASE SECURE SESSION</span></div>
+  </section>
+</div>
 <header class="fui-topbar">
   <div class="brand fui-brand">
     <img src="logo-flywooki.png" alt="Flywooki Studio">
     <div class="brand-copy"><strong>FLYWOOKI STUDIO MANAGER</strong><small>FILAMENT MANAGEMENT SYSTEM</small></div>
   </div>
   <div class="head-actions fui-head-actions">
-    <button class="secondary" id="supabaseBtn" title="Logowanie / Supabase">CHMURA</button>
+    <button class="secondary hide" id="supabaseBtn" title="Wyloguj z FSM">WYLOGUJ</button>
     <input id="fileInput" type="file" accept="application/json" class="hide">
   </div>
 </header>
@@ -622,7 +691,7 @@ select option{background:#191d21;color:#edf3f6}
   </div>
 </div>
 <div id="modalRoot"></div>
-<div id="sbPanel" class="modal hide"><div class="dialog" style="max-width:520px"><h2>FSM 0.7 · Logowanie do chmury</h2><p class="small">Test logowania przez GitHub i weryfikacja dostępu do schemy fsm.</p><label>Project URL</label><input id="sbUrl" placeholder="https://....supabase.co"><label>Publishable key</label><input id="sbKey" placeholder="sb_publishable_..." autocomplete="off"><div class="actions"><button id="sbGithub">Zaloguj przez GitHub</button><button class="secondary" id="sbClose">Zamknij</button></div><div id="sbResult" class="notice">Nie wykonano logowania.</div></div></div>
+<div id="sbPanel" class="fsm-auth-internal" aria-hidden="true"><input id="sbUrl" type="hidden"><input id="sbKey" type="hidden"><button id="sbGithub" type="button" tabindex="-1">GitHub OAuth</button><button id="sbClose" type="button" tabindex="-1">Zamknij</button><div id="sbResult"></div></div>
 <script>
 (()=>{
 const KEY='flywooki-studio-v04',OLD='flywooki-studio-v02',LEGACY='filamentstock-v01',DEVICE_KEY='fsm-device-id';
@@ -1227,7 +1296,18 @@ function wireExport(){document.getElementById('exportBtn').onclick=exportData;do
 wireExport();
 const sbPanel=document.getElementById('sbPanel');
 const oauthStore=localStorage;
-function cloudConnected(){const access=oauthStore.getItem('fsm_sb_access_token'),refresh=oauthStore.getItem('fsm_sb_refresh_token'),expires=Number(oauthStore.getItem('fsm_sb_expires_at')||0);return !!refresh||!!(access&&(!expires||expires>Date.now()))}
+const SUPABASE_URL='https://cgjmsdoeiohzefucxrev.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY='sb_publishable_e5QX0w2YKc26lj9cXgGcNg_O4RFArNb';
+const FSM_ADMIN_EMAIL='marciniakl@o2.pl';
+let sessionAuthenticated=false;
+const loginGate=document.getElementById('fsmLoginGate');
+const loginStatus=document.getElementById('fsmLoginStatus');
+const setLoginMessage=(message,type='')=>{if(!loginStatus)return;loginStatus.textContent=message;loginStatus.classList.toggle('error',type==='error');loginStatus.classList.toggle('success',type==='success')};
+oauthStore.setItem('fsm_sb_url',SUPABASE_URL);
+oauthStore.setItem('fsm_sb_key',SUPABASE_PUBLISHABLE_KEY);
+function showLoginView(){document.getElementById('fsmLoginView')?.classList.remove('hide');document.getElementById('fsmPasswordSetupView')?.classList.add('hide')}
+function enterApplication(){sessionAuthenticated=true;document.body.classList.add('fsm-authenticated');loginGate?.classList.add('hide');showLoginView();setLoginMessage('AUTORYZACJA ZAKOŃCZONA','success');render();updateCloudDock();resetAutoSyncClock()}
+function cloudConnected(){const access=oauthStore.getItem('fsm_sb_access_token'),refresh=oauthStore.getItem('fsm_sb_refresh_token'),expires=Number(oauthStore.getItem('fsm_sb_expires_at')||0);return sessionAuthenticated&& (!!refresh||!!(access&&(!expires||expires>Date.now())))}
 async function getCloudAccessToken(){
  const url=oauthStore.getItem('fsm_sb_url'),key=oauthStore.getItem('fsm_sb_key');
  let token=oauthStore.getItem('fsm_sb_access_token'),expires=Number(oauthStore.getItem('fsm_sb_expires_at')||0);
@@ -1254,18 +1334,125 @@ function updateAutoSyncIndicator(){
  const left=Math.max(0,nextAutoSyncAt-Date.now()),elapsed=Math.min(10000,Math.max(0,10000-left));
  if(mode)mode.textContent='AUTO / ONLINE';if(text)text.textContent='AUTO SYNC · CO 10 S';if(remaining)remaining.textContent=Math.ceil(left/1000)+'s';if(bar)bar.style.width=(elapsed/10000*100).toFixed(1)+'%';
 }
-function updateCloudDock(){let connected=cloudConnected(),btn=document.getElementById('supabaseBtn'),title=document.getElementById('syncDetailTitle'),status=document.getElementById('syncDetailStatus'),detail=document.getElementById('syncCloudDetail'),logout=document.getElementById('syncDisconnect'),syncBtn=document.getElementById('syncAllBtn');if(btn)btn.classList.toggle('hide',connected);if(title)title.textContent=connected?'Synchronizacja · połączenie aktywne':'Synchronizacja · lokalnie';if(status&&(!status.textContent||status.textContent==='Dane są zapisane na tym urządzeniu.'))status.textContent=connected?'Auto-synchronizacja co 10 sekund.':'Dane są zapisane na tym urządzeniu.';if(detail)detail.textContent=connected?'Konto: '+(oauthStore.getItem('fsm_sb_user_label')||'GitHub')+' · katalog + sprzedaż/RW + zdjęcia + magazyn + zakupy + koszty':'';if(logout)logout.classList.toggle('hide',!connected);if(syncBtn)syncBtn.classList.toggle('hide',!connected);let schema=document.getElementById('syncSchema'),revision=document.getElementById('syncRevision'),last=document.getElementById('syncLastChange'),id=document.getElementById('syncDeviceId');if(schema)schema.textContent=String(data.schemaVersion||5);if(revision)revision.textContent=String(data.sync?.revision||0);if(last)last.textContent=data.sync?.lastLocalChange?new Date(data.sync.lastLocalChange).toLocaleString('pl-PL'):'Brak';if(id)id.textContent=String(data.sync?.deviceId||deviceId);if(connected&&!nextAutoSyncAt)nextAutoSyncAt=Date.now()+10000;if(!connected)nextAutoSyncAt=0;updateAutoSyncIndicator()}
-function disconnectCloud(){['fsm_sb_access_token','fsm_sb_refresh_token','fsm_sb_expires_at','fsm_sb_user','fsm_sb_user_label','fsm_catalog_sync_hash','fsm_expenses_sync_hash'].forEach(k=>oauthStore.removeItem(k));updateCloudDock();document.getElementById('syncDetails')?.classList.add('show')}
-document.getElementById('supabaseBtn').onclick=()=>{sbPanel.classList.remove('hide');document.getElementById('sbUrl').value=oauthStore.getItem('fsm_sb_url')||'';document.getElementById('sbKey').value=oauthStore.getItem('fsm_sb_key')||''};document.getElementById('sbClose').onclick=()=>sbPanel.classList.add('hide');
+function updateCloudDock(){let connected=cloudConnected(),btn=document.getElementById('supabaseBtn'),title=document.getElementById('syncDetailTitle'),status=document.getElementById('syncDetailStatus'),detail=document.getElementById('syncCloudDetail'),logout=document.getElementById('syncDisconnect'),syncBtn=document.getElementById('syncAllBtn');if(btn)btn.classList.toggle('hide',!connected);if(title)title.textContent=connected?'Synchronizacja · połączenie aktywne':'Synchronizacja · lokalnie';if(status&&(!status.textContent||status.textContent==='Dane są zapisane na tym urządzeniu.'))status.textContent=connected?'Auto-synchronizacja co 10 sekund.':'Dane są zapisane na tym urządzeniu.';if(detail)detail.textContent=connected?'Konto: '+(oauthStore.getItem('fsm_sb_user_label')||'GitHub')+' · katalog + sprzedaż/RW + zdjęcia + magazyn + zakupy + koszty':'';if(logout)logout.classList.toggle('hide',!connected);if(syncBtn)syncBtn.classList.toggle('hide',!connected);let schema=document.getElementById('syncSchema'),revision=document.getElementById('syncRevision'),last=document.getElementById('syncLastChange'),id=document.getElementById('syncDeviceId');if(schema)schema.textContent=String(data.schemaVersion||5);if(revision)revision.textContent=String(data.sync?.revision||0);if(last)last.textContent=data.sync?.lastLocalChange?new Date(data.sync.lastLocalChange).toLocaleString('pl-PL'):'Brak';if(id)id.textContent=String(data.sync?.deviceId||deviceId);if(connected&&!nextAutoSyncAt)nextAutoSyncAt=Date.now()+10000;if(!connected)nextAutoSyncAt=0;updateAutoSyncIndicator()}
+function disconnectCloud(){
+ const access=oauthStore.getItem('fsm_sb_access_token');
+ if(access){fetch(SUPABASE_URL+'/auth/v1/logout',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+access}}).catch(()=>{});}
+ ['fsm_sb_access_token','fsm_sb_refresh_token','fsm_sb_expires_at','fsm_sb_user','fsm_sb_user_label','fsm_sb_verified','fsm_catalog_sync_hash','fsm_expenses_sync_hash'].forEach(k=>oauthStore.removeItem(k));
+ sessionAuthenticated=false;document.body.classList.remove('fsm-authenticated');loginGate?.classList.remove('hide');showLoginView();
+ const pass=document.getElementById('fsmLoginPassword');if(pass)pass.value='';
+ setLoginMessage('WYLOGOWANO. ZALOGUJ SIĘ PONOWNIE.');updateCloudDock();document.getElementById('syncDetails')?.classList.add('show');
+}
+document.getElementById('supabaseBtn').onclick=disconnectCloud;
+document.getElementById('sbClose').onclick=()=>{};
 const APP_REDIRECT='https://7rzbrwgt6c-a11y.github.io/flywooki-studio/';
 function cleanOAuthUrl(){try{window.history.replaceState(null,document.title,APP_REDIRECT)}catch(e){console.warn('Nie udało się oczyścić adresu callback:',e)}}
 function storeOAuthSession(session){if(!session?.access_token)return;oauthStore.setItem('fsm_sb_access_token',session.access_token);if(session.refresh_token)oauthStore.setItem('fsm_sb_refresh_token',session.refresh_token);if(session.expires_in)oauthStore.setItem('fsm_sb_expires_at',String(Date.now()+Number(session.expires_in)*1000));if(session.user)oauthStore.setItem('fsm_sb_user',JSON.stringify(session.user))}
-async function verifyCloudSession(session){let url=oauthStore.getItem('fsm_sb_url'),key=oauthStore.getItem('fsm_sb_key'),out=document.getElementById('sbResult'),accessToken=typeof session==='string'?session:session?.access_token;storeOAuthSession(typeof session==='string'?{access_token:session}:session);if(!url||!key||!accessToken){out.textContent='Sesja odebrana, ale brakuje URL, klucza lub tokenu.';return}out.textContent='Sesja OAuth odebrana. Sprawdzam odczyt schemy fsm…';try{let vr=await fetch(url+'/rest/v1/stock_balance?select=product_id&limit=1',{headers:{apikey:key,Authorization:'Bearer '+accessToken,'Accept-Profile':'fsm','Content-Profile':'fsm'}});let detail=await vr.text();if(vr.ok){out.textContent='Logowanie GitHub OK. Dostęp do schemy fsm/stock_balance potwierdzony (HTTP '+vr.status+').';oauthStore.setItem('fsm_sb_verified','1');let u=session?.user;if(u){oauthStore.setItem('fsm_sb_user_label',u.user_metadata?.user_name||u.user_metadata?.name||u.email||'GitHub')}updateCloudDock()}else{out.textContent='Sesja OAuth odebrana (JWT OK), ale test fsm/stock_balance zwrócił HTTP '+vr.status+'. '+detail.slice(0,260)}}catch(e){out.textContent='Sesja OAuth odebrana, ale test odczytu nie powiódł się: '+e.message}}
-async function consumeOAuthCode(code){let url=oauthStore.getItem('fsm_sb_url'),key=oauthStore.getItem('fsm_sb_key'),verifier=oauthStore.getItem('fsm_sb_code_verifier'),out=document.getElementById('sbResult');sbPanel.classList.remove('hide');if(!url||!key||!verifier){out.textContent='Brakuje danych sesji testowej (URL, publishable key lub PKCE verifier). Uruchom logowanie ponownie.';return}out.textContent='Odbieram sesję OAuth (PKCE)…';try{let r=await fetch(url+'/auth/v1/token?grant_type=pkce',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({auth_code:code,code_verifier:verifier})});let j=await r.json().catch(()=>({}));if(!r.ok||!j.access_token){out.textContent='Nie udało się odebrać sesji OAuth (HTTP '+r.status+'): '+(j.msg||j.message||j.error_description||j.error||'Brak tokenu w odpowiedzi.');return}oauthStore.removeItem('fsm_sb_code_verifier');await verifyCloudSession(j)}catch(e){out.textContent='Błąd odbierania sesji: '+e.message}finally{oauthStore.removeItem('fsm_sb_code_verifier')}}
-// OAuth callback handler: expose diagnostics, then remove one-time code/token from the address bar.
+async function verifyCloudSession(session,{showPasswordSetup=false}={}){
+ const url=SUPABASE_URL,key=SUPABASE_PUBLISHABLE_KEY;
+ const accessToken=typeof session==='string'?session:session?.access_token;
+ if(!accessToken){setLoginMessage('Supabase nie zwrócił tokenu sesji. Spróbuj ponownie.','error');return false;}
+ storeOAuthSession(typeof session==='string'?{access_token:session}:session);
+ setLoginMessage('WERYFIKACJA KONTA I DOSTĘPU DO BAZY…');
+ try{
+  const userResponse=await fetch(url+'/auth/v1/user',{headers:{apikey:key,Authorization:'Bearer '+accessToken}});
+  const user=await userResponse.json().catch(()=>({}));
+  if(!userResponse.ok||!user.id)throw new Error('Nie udało się potwierdzić konta Supabase (HTTP '+userResponse.status+'). '+(user.message||user.msg||''));
+  if(String(user.email||'').trim().toLowerCase()!==FSM_ADMIN_EMAIL.toLowerCase())throw new Error('Zalogowane konto ma adres '+(user.email||'bez adresu e-mail')+'. Do FSM przypisane jest inne konto administratora.');
+  const accessResponse=await fetch(url+'/rest/v1/stock_balance?select=product_id&limit=1',{headers:{apikey:key,Authorization:'Bearer '+accessToken,'Accept-Profile':'fsm','Content-Profile':'fsm'}});
+  const accessDetail=await accessResponse.text();
+  if(!accessResponse.ok)throw new Error('Konto potwierdzone, ale nie ma dostępu do schemy fsm/stock_balance (HTTP '+accessResponse.status+'). '+accessDetail.slice(0,240));
+  oauthStore.setItem('fsm_sb_verified','1');
+  oauthStore.setItem('fsm_sb_user_label',user.user_metadata?.user_name||user.user_metadata?.name||user.email||'admin');
+  if(showPasswordSetup){
+   sessionAuthenticated=false;document.body.classList.remove('fsm-authenticated');loginGate?.classList.remove('hide');
+   document.getElementById('fsmLoginView')?.classList.add('hide');document.getElementById('fsmPasswordSetupView')?.classList.remove('hide');
+   const initial=document.getElementById('fsmInitialPassword'),confirm=document.getElementById('fsmInitialPasswordConfirm');if(initial)initial.value='admin';if(confirm)confirm.value='admin';
+   setLoginMessage('KONTO POTWIERDZONE. USTAW HASŁO DLA LOGINU ADMIN.','success');
+   return true;
+  }
+  enterApplication();
+  const status=document.getElementById('syncDetailStatus');if(status)status.textContent='Zalogowano jako admin. Auto-synchronizacja co 10 sekund.';
+  return true;
+ }catch(error){
+  sessionAuthenticated=false;document.body.classList.remove('fsm-authenticated');loginGate?.classList.remove('hide');
+  ['fsm_sb_access_token','fsm_sb_refresh_token','fsm_sb_expires_at','fsm_sb_user','fsm_sb_user_label','fsm_sb_verified'].forEach(k=>oauthStore.removeItem(k));
+  setLoginMessage(error.message||'Nie udało się zweryfikować konta.','error');return false;
+ }
+}
+async function consumeOAuthCode(code){
+ const url=SUPABASE_URL,key=SUPABASE_PUBLISHABLE_KEY,verifier=oauthStore.getItem('fsm_sb_code_verifier');
+ setLoginMessage('ODBIERAM BEZPIECZNĄ SESJĘ GITHUB…');
+ if(!verifier){setLoginMessage('Brakuje weryfikatora OAuth. Rozpocznij pierwszą konfigurację ponownie.','error');return;}
+ try{
+  const response=await fetch(url+'/auth/v1/token?grant_type=pkce',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({auth_code:code,code_verifier:verifier})});
+  const session=await response.json().catch(()=>({}));
+  if(!response.ok||!session.access_token)throw new Error('Nie udało się odebrać sesji GitHub (HTTP '+response.status+'): '+(session.msg||session.message||session.error_description||session.error||'Brak tokenu.'));
+  oauthStore.removeItem('fsm_sb_code_verifier');
+  const setupRequested=sessionStorage.getItem('fsm_setup_admin_password')==='1';sessionStorage.removeItem('fsm_setup_admin_password');
+  await verifyCloudSession(session,{showPasswordSetup:setupRequested});
+ }catch(error){oauthStore.removeItem('fsm_sb_code_verifier');sessionStorage.removeItem('fsm_setup_admin_password');setLoginMessage(error.message||'Błąd logowania przez GitHub.','error');}
+}
+async function loginAdmin(event){
+ event?.preventDefault();
+ const username=String(document.getElementById('fsmLoginName')?.value||'').trim().toLowerCase();
+ const password=String(document.getElementById('fsmLoginPassword')?.value||'');
+ const submit=document.getElementById('fsmLoginSubmit');
+ if(username!=='admin'){setLoginMessage('Nieprawidłowy login. Użyj loginu admin.','error');return;}
+ if(!password){setLoginMessage('Wpisz hasło administratora.','error');return;}
+ if(submit){submit.disabled=true;submit.textContent='WERYFIKACJA…';}
+ setLoginMessage('SPRAWDZAM LOGIN I HASŁO W SUPABASE AUTH…');
+ try{
+  const response=await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:FSM_ADMIN_EMAIL,password})});
+  const session=await response.json().catch(()=>({}));
+  if(!response.ok||!session.access_token){
+   let message=session.msg||session.message||session.error_description||session.error||'';
+   if(response.status===400||response.status===401)message='Nieprawidłowy login lub hasło. Jeżeli konto dotąd logowało się wyłącznie przez GitHub, wybierz pierwsze ustawienie hasła przez GitHub.';
+   throw new Error(message||'Logowanie nie powiodło się (HTTP '+response.status+').');
+  }
+  await verifyCloudSession(session);
+ }catch(error){setLoginMessage(error.message||'Nie udało się zalogować.','error');}
+ finally{if(submit){submit.disabled=false;submit.innerHTML='ZALOGUJ <span aria-hidden="true">↗</span>';}}
+}
+async function saveInitialAdminPassword(event){
+ event?.preventDefault();
+ const password=String(document.getElementById('fsmInitialPassword')?.value||''),confirmPassword=String(document.getElementById('fsmInitialPasswordConfirm')?.value||'');
+ if(!password){setLoginMessage('Wpisz nowe hasło.','error');return;}
+ if(password!==confirmPassword){setLoginMessage('Podane hasła nie są identyczne.','error');return;}
+ const accessToken=oauthStore.getItem('fsm_sb_access_token');if(!accessToken){setLoginMessage('Sesja GitHub wygasła. Rozpocznij pierwszą konfigurację ponownie.','error');showLoginView();return;}
+ const submit=document.getElementById('fsmPasswordSetupSubmit');if(submit){submit.disabled=true;submit.textContent='ZAPISYWANIE…';}
+ setLoginMessage('ZAPISUJĘ HASŁO W SUPABASE AUTH…');
+ try{
+  const response=await fetch(SUPABASE_URL+'/auth/v1/user',{method:'PUT',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({password})});
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(result.msg||result.message||result.error_description||result.error||('Supabase odrzucił hasło (HTTP '+response.status+').'));
+  if(result.email&&String(result.email).toLowerCase()!==FSM_ADMIN_EMAIL.toLowerCase())throw new Error('Supabase zwrócił inne konto po zmianie hasła.');
+  enterApplication();
+  const status=document.getElementById('syncDetailStatus');if(status)status.textContent='Hasło administratora ustawione. Zalogowano jako admin.';
+ }catch(error){setLoginMessage(error.message||'Nie udało się zapisać hasła.','error');}
+ finally{if(submit){submit.disabled=false;submit.innerHTML='ZAPISZ HASŁO <span aria-hidden="true">↗</span>';}}
+}
+document.getElementById('fsmLoginForm').addEventListener('submit',loginAdmin);
+document.getElementById('fsmPasswordSetupForm').addEventListener('submit',saveInitialAdminPassword);
+document.getElementById('fsmCancelPasswordSetup').addEventListener('click',()=>{disconnectCloud();showLoginView();});
+document.getElementById('fsmGitHubSetup').addEventListener('click',()=>{
+ if(!confirm('Otworzyć GitHub, aby potwierdzić istniejące konto Supabase? Po powrocie ustawisz hasło do logowania loginem admin.'))return;
+ sessionStorage.setItem('fsm_setup_admin_password','1');document.getElementById('sbGithub').click();
+});
+document.getElementById('sbGithub').onclick=async()=>{
+ const url=SUPABASE_URL,key=SUPABASE_PUBLISHABLE_KEY;
+ setLoginMessage('PRZYGOTOWUJĘ BEZPIECZNE LOGOWANIE GITHUB…');
+ try{
+  const verifier=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
+  oauthStore.setItem('fsm_sb_code_verifier',verifier);
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier));
+  const challenge=btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  const redirect=encodeURIComponent(APP_REDIRECT);
+  location.href=url+'/auth/v1/authorize?provider=github&apikey='+encodeURIComponent(key)+'&redirect_to='+redirect+'&code_challenge='+encodeURIComponent(challenge)+'&code_challenge_method=s256';
+ }catch(error){sessionStorage.removeItem('fsm_setup_admin_password');setLoginMessage('Nie można rozpocząć logowania GitHub: '+error.message,'error');}
+};
 const callbackUrl=new URL(window.location.href),oauthCode=callbackUrl.searchParams.get('code'),oauthError=callbackUrl.searchParams.get('error')||callbackUrl.searchParams.get('error_description'),hashParams=new URLSearchParams(callbackUrl.hash.slice(1)),hashToken=hashParams.get('access_token');
-if(oauthCode||oauthError||hashToken){sbPanel.classList.remove('hide');cleanOAuthUrl();if(oauthError){document.getElementById('sbResult').textContent='GitHub/Supabase zwrócił błąd OAuth: '+oauthError+(callbackUrl.searchParams.get('error_description')?' — '+callbackUrl.searchParams.get('error_description'):'')}else if(oauthCode){consumeOAuthCode(oauthCode)}else if(hashToken){verifyCloudSession({access_token:hashToken,refresh_token:hashParams.get('refresh_token'),expires_in:hashParams.get('expires_in'),user:null})}}
-document.getElementById('sbGithub').onclick=async()=>{let url=document.getElementById('sbUrl').value.trim().replace(/\/$/,''),key=document.getElementById('sbKey').value.trim(),out=document.getElementById('sbResult');if(!/^https:\/\/[^ ]+\.supabase\.co$/.test(url)||!key.startsWith('sb_publishable_')){out.textContent='Sprawdź Project URL oraz Publishable key.';return}oauthStore.setItem('fsm_sb_url',url);oauthStore.setItem('fsm_sb_key',key);out.textContent='Przygotowuję bezpieczne logowanie…';try{let verifier=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');oauthStore.setItem('fsm_sb_code_verifier',verifier);let digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier));let challenge= btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');let redirect=encodeURIComponent(APP_REDIRECT);location.href=url+'/auth/v1/authorize?provider=github&apikey='+encodeURIComponent(key)+'&redirect_to='+redirect+'&code_challenge='+encodeURIComponent(challenge)+'&code_challenge_method=s256'}catch(e){out.textContent='Nie można przygotować OAuth PKCE: '+e.message}};
+if(oauthCode||oauthError||hashToken){cleanOAuthUrl();if(oauthError){sessionStorage.removeItem('fsm_setup_admin_password');setLoginMessage('GitHub/Supabase zwrócił błąd OAuth: '+oauthError+(callbackUrl.searchParams.get('error_description')?' — '+callbackUrl.searchParams.get('error_description'):''),'error')}else if(oauthCode){consumeOAuthCode(oauthCode)}else if(hashToken){const setupRequested=sessionStorage.getItem('fsm_setup_admin_password')==='1';sessionStorage.removeItem('fsm_setup_admin_password');verifyCloudSession({access_token:hashToken,refresh_token:hashParams.get('refresh_token'),expires_in:hashParams.get('expires_in'),user:null},{showPasswordSetup:setupRequested})}}
 // Synchronizacja katalogu i rejestru kosztow. Pozostale moduly nie sa objete integracja.
 let syncInProgress=false;
 async function fingerprint(value){
