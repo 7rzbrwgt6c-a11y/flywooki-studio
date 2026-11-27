@@ -1865,25 +1865,27 @@ async function syncStockBalance(ctx,remoteProducts,localStockAtStart){
 async function syncAllToCloud({automatic=false}={}){
  if(syncInProgress)return false;
  if(!cloudConnected()){if(!automatic)alert('Najpierw połącz FSM z Supabase.');return false}
- if(!automatic&&!confirm('Uruchomić pełną synchronizację katalogu, sprzedaży/RW, zdjęć, stanów magazynowych, zakupów, kosztów i historii? Supabase będzie wspólnym źródłem stanów. Operacje magazynowe są dopisywane do niezmiennego dziennika. Zalecany eksport kopii przed kontynuacją.'))return false;
+ if(!automatic&&!confirm('Uruchomić synchronizację etapową FSM? Najpierw katalog, dostawcy i zakupy/przyjęcia, potem historia ruchów magazynowych, dokumenty sprzedaży/RW, zdjęcia, koszty i kontrola stanów. Zalecany eksport kopii przed kontynuacją.'))return false;
  syncInProgress=true;let btn=document.getElementById('syncAllBtn'),status=document.getElementById('syncDetailStatus'),detail=document.getElementById('syncCloudDetail');
  if(btn){btn.disabled=true;btn.textContent=automatic?'Synchronizacja…':'Synchronizuję…'}
- if(status)status.textContent=automatic?'Automatyczna synchronizacja w toku…':'Synchronizuję katalog, sprzedaż/RW, zdjęcia i magazyn…';updateAutoSyncIndicator();
+ if(status)status.textContent=automatic?'Automatyczna synchronizacja etapowa w toku…':'Synchronizuję według zależności danych…';updateAutoSyncIndicator();
  const localStockAtStart=new Map(data.products.map(p=>[String(p.cnId||''),Number(p.stock)||0]));
- let catalogOk=false,supplierOk=false,purchaseOk=false,expenseOk=false,salesOk=false,imageOk=false,historyOk=false,stockOk=false,error=null,ctx=null,remoteProducts=[];
- try{ctx=await cloudApiContext();}catch(e){error=e;}
+ const stages={catalog:false,suppliers:false,purchases:false,images:false,history:false,sales:false,expenses:false,stock:false};const errors=[];let ctx=null,remoteProducts=[];
+ const stage=async(key,label,fn,requires=[])=>{if(!requires.every(r=>stages[r])){errors.push(label+': pominięto, ponieważ nie zakończył się etap zależny.');return false;}try{if(status)status.textContent='Synchronizacja: '+label+'…';await fn();stages[key]=true;return true;}catch(e){errors.push(label+': '+(e?.message||String(e)));if(status)status.textContent='Błąd '+label+': '+(e?.message||String(e));return false;}};
+ try{ctx=await cloudApiContext();}catch(e){errors.push('Połączenie: '+e.message);}
  if(ctx){
-  try{const catalog=await syncCatalogToCloud(ctx);remoteProducts=catalog.remoteProducts;catalogOk=true;}catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd katalogu: '+e.message;}
-  if(catalogOk){try{const result=await syncSalesToCloud(ctx);salesOk=!!result;}catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd sprzedaży/RW: '+e.message;}}
-  try{const suppliers=await syncSuppliersToCloud(ctx);supplierOk=true;const result=await syncPurchasesToCloud(ctx,suppliers);purchaseOk=!!result;}catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd zakupów/dostawców: '+e.message;}
-  if(catalogOk){try{const result=await syncProductImages(ctx,remoteProducts);imageOk=true; if(result.changed){} }catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd zdjęć: '+e.message;}}
-  if(catalogOk&&salesOk){try{await syncInventoryHistory(ctx,remoteProducts,localStockAtStart);historyOk=true;}catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd historii/operacji magazynowych: '+e.message;}}
-  if(catalogOk&&salesOk&&historyOk&&purchaseOk){try{await syncStockBalance(ctx,remoteProducts,localStockAtStart);stockOk=true;}catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd pobierania stanów: '+e.message;}}
-  try{const result=await syncExpensesToCloud();expenseOk=!!result;}catch(e){error=error?new Error(error.message+'; '+e.message):e;if(status)status.textContent='Błąd kosztów: '+e.message;}
+  await stage('catalog','katalog produktów i usług',async()=>{const result=await syncCatalogToCloud(ctx);remoteProducts=result.remoteProducts;if(!remoteProducts?.length&&data.products.some(p=>p.itemType!=='service'))throw new Error('Zdalny katalog zwrócił pustą listę mimo lokalnych produktów.');});
+  let remoteSuppliers=[];await stage('suppliers','dostawcy',async()=>{remoteSuppliers=await syncSuppliersToCloud(ctx);},['catalog']);
+  await stage('purchases','zakupy i przyjęcia',async()=>{await syncPurchasesToCloud(ctx,remoteSuppliers);},['catalog','suppliers']);
+  await stage('images','zdjęcia produktów',async()=>{await syncProductImages(ctx,remoteProducts);},['catalog']);
+  await stage('history','historia i operacje magazynowe',async()=>{await syncInventoryHistory(ctx,remoteProducts,localStockAtStart);},['catalog','purchases']);
+  await stage('sales','dokumenty sprzedaży/RW',async()=>{await syncSalesToCloud(ctx);},['catalog','history']);
+  await stage('expenses','koszty',async()=>{await syncExpensesToCloud();},['catalog']);
+  await stage('stock','uzgodnienie stanów',async()=>{await syncStockBalance(ctx,remoteProducts,localStockAtStart);},['catalog','purchases','history','sales']);
  }
- const allOk=catalogOk&&supplierOk&&purchaseOk&&expenseOk&&salesOk&&imageOk&&historyOk&&stockOk;
- if(allOk){const stamp=new Date().toLocaleTimeString('pl-PL');if(status)status.textContent='Synchronizacja zakończona · katalog, sprzedaż/RW, zdjęcia, magazyn, zakupy i koszty · '+stamp;if(detail)detail.textContent='Konto: '+(oauthStore.getItem('fsm_sb_user_label')||'GitHub')+' · katalog + sprzedaż/RW + zdjęcia + magazyn + zakupy + koszty · auto-sync 10 s';data.sync.lastSync=new Date().toISOString();data.sync.status='synced';save();}
- else{const message=error?.message||'Nie udało się zsynchronizować wszystkich danych.';if(status)status.textContent='Synchronizacja częściowa / błąd: '+message;if(detail)detail.textContent='Sprawdź szczegóły błędu synchronizacji. Dane lokalne zostały zachowane.';localStorage.setItem(KEY,JSON.stringify(data));if(!automatic)alert('Synchronizacja nie została w pełni zakończona.\n'+message+'\n\nDane lokalne pozostają zachowane.');}
+ const allOk=Object.values(stages).every(Boolean)&&errors.length===0;
+ if(allOk){const stamp=new Date().toLocaleTimeString('pl-PL');if(status)status.textContent='Synchronizacja zakończona · wszystkie etapy · '+stamp;if(detail)detail.textContent='Konto: '+(oauthStore.getItem('fsm_sb_user_label')||'GitHub')+' · etapowa synchronizacja katalogu, zakupów, ruchów, sprzedaży/RW, zdjęć, kosztów i stanów';data.sync.lastSync=new Date().toISOString();data.sync.status='synced';save();}
+ else{const message=errors.join('\n');if(status)status.textContent='Synchronizacja częściowa · '+errors.length+' problem(y)';if(detail)detail.textContent=message+' · Dane lokalne zachowane; kolejna próba za 60 s.';localStorage.setItem(KEY,JSON.stringify(data));if(!automatic)alert('Synchronizacja częściowa.\n\n'+message+'\n\nDane lokalne pozostają zachowane. Nieudane etapy zostaną ponowione.');}
  if(btn){btn.disabled=false;btn.textContent='Synchronizuj teraz'}syncInProgress=false;resetAutoSyncClock();if(!allOk)nextAutoSyncAt=Date.now()+60000;
  return allOk;
 }
