@@ -1463,38 +1463,66 @@ async function fingerprint(value){
  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(value)));
  return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
 }
+function normalizeProductCn(value){return String(value??'').trim().replace(/\s+/g,'').toLocaleUpperCase('pl-PL')}
 async function syncCatalogToCloud(ctx){
- // Na pierwszym uruchomieniu nowej wersji zachowaj typ, który mógł już istnieć w chmurze,
- // zanim lokalne rekordy starszej wersji otrzymały domyślny typ filament.
- const remoteTypeRows=await ctx.getAll('products?select=id,cn_code,item_type','Odczyt typów kartotek z Supabase');
- const remoteTypeById=new Map(remoteTypeRows.map(r=>[String(r.id),r])),remoteTypeByCn=new Map(remoteTypeRows.filter(r=>r.cn_code).map(r=>[String(r.cn_code),r]));
- for(const p of data.products){if(p._itemTypeLegacyDefault){const match=remoteTypeById.get(String(p.id))||(p.cnId?remoteTypeByCn.get(String(p.cnId)):null);if(match?.item_type)p.itemType=match.item_type;delete p._itemTypeLegacyDefault;}}
+ // Pull the actual remote catalogue first. The local fingerprint cannot prove that
+ // a product still exists in Supabase (it may have been removed remotely or skipped
+ // during a previously partial sync).
  const fields='id,name,manufacturer,material,color,color_code,cn_code,item_type,purchase_price_net,purchase_price_gross,sale_price,unit_weight,low_threshold,active,notes,updated_at';
- const localRows=data.products.map(p=>({id:p.id,name:p.name,manufacturer:p.brand||null,material:p.category||null,color:p.color||null,color_code:null,cn_code:p.cnId||null,item_type:p.itemType||'filament',purchase_price_net:Number(p.unitCost)||0,purchase_price_gross:Number(p.unitCost)||0,sale_price:Number(p.retailPrice)||0,unit_weight:Number(p.unitWeight)||1000,low_threshold:Number(p.lowThreshold)||1,active:true,notes:p.notes||null}));
- const hash=await fingerprint(localRows);
- if(localRows.length&&hash!==oauthStore.getItem('fsm_catalog_sync_hash')){
-  await ctx.postRows('products',localRows);
-  oauthStore.setItem('fsm_catalog_sync_hash',hash);oauthStore.setItem('fsm_catalog_sync_at',new Date().toISOString());
+ const remoteTypeRows=await ctx.getAll('products?select=id,cn_code,item_type','Odczyt typów kartotek z Supabase');
+ const remoteTypeById=new Map(remoteTypeRows.map(r=>[String(r.id),r])),remoteTypeByCn=new Map(remoteTypeRows.filter(r=>r.cn_code).map(r=>[normalizeProductCn(r.cn_code),r]));
+ for(const p of data.products){
+  if(!p.id){p.id=crypto.randomUUID();}
+  if(p._itemTypeLegacyDefault){const match=remoteTypeById.get(String(p.id))||(p.cnId?remoteTypeByCn.get(normalizeProductCn(p.cnId)):null);if(match?.item_type)p.itemType=match.item_type;delete p._itemTypeLegacyDefault;}
  }
- // Pobieramy katalog po wysłaniu lokalnych zmian. Dzięki temu urządzenie bez lokalnego katalogu
- // dostaje produkty, a aplikacja nie traktuje samego wysłania jako pełnej synchronizacji.
- const remote=await ctx.getAll('products?select='+fields+'&order=name.asc','Pobieranie katalogu produktów');
+ const localRows=data.products.map(p=>({id:p.id,name:p.name,manufacturer:p.brand||null,material:p.category||null,color:p.color||null,color_code:null,cn_code:String(p.cnId||'').trim()||null,item_type:p.itemType||'filament',purchase_price_net:Number(p.unitCost)||0,purchase_price_gross:Number(p.unitCost)||0,sale_price:Number(p.retailPrice)||0,unit_weight:Number(p.unitWeight)||1000,low_threshold:Number(p.lowThreshold)||1,active:true,notes:p.notes||null}));
+ const localHash=await fingerprint(localRows),cachedHash=oauthStore.getItem('fsm_catalog_sync_hash')||'';
+ let remote=await ctx.getAll('products?select='+fields+'&order=name.asc','Weryfikacja rzeczywistego katalogu produktów');
+ const makeMaps=rows=>({byId:new Map(rows.map(r=>[String(r.id),r])),byCn:new Map(rows.filter(r=>r.cn_code).map(r=>[normalizeProductCn(r.cn_code),r]))});
+ let maps=makeMaps(remote);
+ const duplicateLocalCns=new Map();
+ for(const row of localRows){const key=normalizeProductCn(row.cn_code);if(!key)continue;if(duplicateLocalCns.has(key))throw new Error('Dwa lokalne produkty mają ten sam kod CN/SKU „'+row.cn_code+'”: '+duplicateLocalCns.get(key)+' oraz '+row.name+'. Popraw duplikat przed synchronizacją.');duplicateLocalCns.set(key,row.name);}
+ // Force-create missing remote rows even if the cached local hash has not changed.
+ // If the CN already exists under a different cloud UUID, reuse that cloud identity
+ // instead of attempting a duplicate insert.
+ const missingRows=[];
+ for(const row of localRows){
+  const byId=maps.byId.get(String(row.id)),byCn=row.cn_code?maps.byCn.get(normalizeProductCn(row.cn_code)):null;
+  if(!byId&&!byCn)missingRows.push(row);
+ }
+ const hashChanged=localHash!==cachedHash;
+ let rowsToUpsert=[];
+ if(hashChanged){
+  for(const row of localRows){
+   const byId=maps.byId.get(String(row.id)),byCn=row.cn_code?maps.byCn.get(normalizeProductCn(row.cn_code)):null;
+   if(byId||!byCn)rowsToUpsert.push(row);
+  }
+ }else rowsToUpsert=missingRows;
+ if(rowsToUpsert.length){
+  await ctx.postRows('products',rowsToUpsert);
+  remote=await ctx.getAll('products?select='+fields+'&order=name.asc','Potwierdzenie katalogu po zapisie produktów');
+  maps=makeMaps(remote);
+ }
+ // Verify every local record has a cloud counterpart by UUID or normalized CN.
+ const unresolved=localRows.filter(row=>!maps.byId.has(String(row.id))&&!(row.cn_code&&maps.byCn.has(normalizeProductCn(row.cn_code))));
+ if(unresolved.length)throw new Error('Nie udało się potwierdzić produktów w katalogu Supabase: '+unresolved.slice(0,8).map(p=>`${p.name} (CN ${p.cn_code||'brak'})`).join(', ')+'.');
+ oauthStore.setItem('fsm_catalog_sync_hash',localHash);oauthStore.setItem('fsm_catalog_sync_at',new Date().toISOString());
  const byId=new Map(data.products.map(p=>[String(p.id),p]));
- const byCn=new Map(data.products.map(p=>[String(p.cnId||''),p]).filter(([cn])=>cn));
+ const byCn=new Map(data.products.map(p=>[normalizeProductCn(p.cnId||''),p]).filter(([cn])=>cn));
  let changed=false;
  for(const rp of remote){
-  let p=byId.get(String(rp.id))||(rp.cn_code?byCn.get(String(rp.cn_code)):null);
+  let p=byId.get(String(rp.id))||(rp.cn_code?byCn.get(normalizeProductCn(rp.cn_code)):null);
   if(!p){
    p={id:rp.id,cnId:rp.cn_code||('REMOTE-'+String(rp.id).slice(0,8)),name:rp.name||'Produkt z Supabase',brand:rp.manufacturer||'Nieznany',category:rp.material||'Inny',color:rp.color||'',unitWeight:Number(rp.unit_weight)||1000,unitCost:Number(rp.purchase_price_gross)||Number(rp.purchase_price_net)||0,retailPrice:Number(rp.sale_price)||0,stock:0,lowThreshold:Number(rp.low_threshold)||1,itemType:rp.item_type||'filament',image:'',createdAt:rp.created_at||new Date().toISOString()};
-   data.products.push(p);byId.set(String(p.id),p);if(p.cnId)byCn.set(String(p.cnId),p);changed=true;
+   data.products.push(p);byId.set(String(p.id),p);if(p.cnId)byCn.set(normalizeProductCn(p.cnId),p);changed=true;
   }else{
-   // Uzupełniajemy brakujące metadane, ale nie nadpisujemy danych lokalnych nowszą kopią bez znacznika wersji.
    if(!p.unitWeight&&rp.unit_weight){p.unitWeight=Number(rp.unit_weight);changed=true;}
    if(!p.lowThreshold&&rp.low_threshold){p.lowThreshold=Number(rp.low_threshold);changed=true;}
    if(!p.cnId&&rp.cn_code){p.cnId=rp.cn_code;changed=true;}if(!p.itemType&&rp.item_type){p.itemType=rp.item_type;changed=true;}
   }
  }
- return{remoteProducts:remote,changed};
+ if(changed)localStorage.setItem(KEY,JSON.stringify(data));
+ return{remoteProducts:remote,changed,repairedMissing:rowsToUpsert.length,verifiedLocal:localRows.length};
 }
 async function cloudApiContext(){
  const url=oauthStore.getItem('fsm_sb_url'),key=oauthStore.getItem('fsm_sb_key'),token=await getCloudAccessToken();
@@ -1532,7 +1560,7 @@ function adjustLocalPurchaseSnapshot(docId,targetMap,description){
  data.sync.purchaseStockApplied[docId]=targetMap;
 }
 async function reconcilePurchaseLedger(ctx,docId,items,productIdByCn,docMeta={}){
- const desired=new Map();for(const item of items||[]){const pId=productIdByCn.get(String(item.cn||''));if(!pId)throw new Error('Nie znaleziono produktu CN '+item.cn+' w katalogu Supabase.');const qty=Number(item.qty)||0;if(!Number.isInteger(qty))throw new Error('Supabase ma ilości zakupowe zapisane jako liczby całkowite. Pozycja CN '+item.cn+' ma ilość '+qty+'. Zmień ją na pełną liczbę sztuk.');const current=desired.get(pId)||{qty:0,value:0};current.qty+=qty;current.value+=qty*(Number(item.cost)||0);desired.set(pId,current);}
+ const desired=new Map();for(const item of items||[]){const pId=productIdByCn.get(normalizeProductCn(item.cn));if(!pId)throw new Error('Nie znaleziono produktu CN '+item.cn+' w katalogu Supabase.');const qty=Number(item.qty)||0;if(!Number.isInteger(qty))throw new Error('Supabase ma ilości zakupowe zapisane jako liczby całkowite. Pozycja CN '+item.cn+' ma ilość '+qty+'. Zmień ją na pełną liczbę sztuk.');const current=desired.get(pId)||{qty:0,value:0};current.qty+=qty;current.value+=qty*(Number(item.cost)||0);desired.set(pId,current);}
  const ops=await ctx.getAll('stock_operations?select=id,product_id,operation_type,quantity_change,reference_id,client_operation_id&reference_id=eq.'+encodeURIComponent(docId),'Odczyt operacji magazynowych zakupu');
  const ledger=new Map();for(const op of ops){const row=ledger.get(op.product_id)||{qty:0};row.qty+=Number(op.quantity_change)||0;ledger.set(op.product_id,row)}
  const products=new Set([...desired.keys(),...ledger.keys()]),insert=[];
@@ -1548,11 +1576,28 @@ async function syncPurchasesToCloud(ctx,remoteSuppliers){
  // Ensure stable IDs for all documents and lines before any network operation.
  let idsChanged=false;for(const doc of localDocs){if(!doc.id){doc.id=crypto.randomUUID();idsChanged=true}if(!Array.isArray(doc.items))doc.items=[];for(const item of doc.items){if(!item.id){item.id=crypto.randomUUID();idsChanged=true}if(!item.updatedAt)item.updatedAt=doc.updatedAt||doc.created||new Date().toISOString()}if(!doc.updatedAt)doc.updatedAt=doc.created||new Date().toISOString();}
  if(idsChanged)localStorage.setItem(KEY,JSON.stringify(data));
- const remoteProducts=await ctx.getAll('products?select=id,name,manufacturer,material,color,color_code,cn_code,purchase_price_net,purchase_price_gross,sale_price,active&order=name.asc','Odczyt katalogu produktów');
- const remoteProductById=new Map(remoteProducts.map(p=>[p.id,p])),remoteProductByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[String(p.cn_code),p]));
- const localProductById=new Map(data.products.map(p=>[p.id,p])),localProductByCn=new Map(data.products.map(p=>[String(p.cnId),p]));
+ let remoteProducts=await ctx.getAll('products?select=id,name,manufacturer,material,color,color_code,cn_code,item_type,purchase_price_net,purchase_price_gross,sale_price,unit_weight,low_threshold,active&order=name.asc','Odczyt katalogu produktów');
+ let remoteProductById=new Map(remoteProducts.map(p=>[String(p.id),p])),remoteProductByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[normalizeProductCn(p.cn_code),p]));
+ const localProductById=new Map(data.products.map(p=>[String(p.id),p])),localProductByCn=new Map(data.products.map(p=>[normalizeProductCn(p.cnId),p]).filter(([cn])=>cn));
+ // Last-resort repair at the purchase boundary: if a purchase references a product
+ // present locally but absent remotely, publish that exact local card and re-read it.
+ const missingPurchaseCodes=[...new Set(localDocs.flatMap(doc=>(doc.items||[]).map(item=>String(item.cn||'').trim()).filter(cn=>cn&&!remoteProductByCn.has(normalizeProductCn(cn)))))];
+ if(missingPurchaseCodes.length){
+  const repairRows=[];
+  for(const cn of missingPurchaseCodes){
+   const localProduct=localProductByCn.get(normalizeProductCn(cn));
+   if(!localProduct)throw new Error('Pozycja zakupu ma kod CN '+cn+', ale produktu nie ma ani w lokalnym katalogu FSM, ani w katalogu Supabase. Dodaj lub popraw kartotekę produktu, a następnie ponów synchronizację.');
+   if(!localProduct.id)localProduct.id=crypto.randomUUID();
+   repairRows.push({id:localProduct.id,name:localProduct.name,manufacturer:localProduct.brand||null,material:localProduct.category||null,color:localProduct.color||null,color_code:null,cn_code:String(localProduct.cnId||cn).trim(),item_type:localProduct.itemType||'filament',purchase_price_net:Number(localProduct.unitCost)||0,purchase_price_gross:Number(localProduct.unitCost)||0,sale_price:Number(localProduct.retailPrice)||0,unit_weight:Number(localProduct.unitWeight)||1000,low_threshold:Number(localProduct.lowThreshold)||1,active:true,notes:localProduct.notes||null});
+  }
+  await ctx.postRows('products',repairRows);
+  remoteProducts=await ctx.getAll('products?select=id,name,manufacturer,material,color,color_code,cn_code,item_type,purchase_price_net,purchase_price_gross,sale_price,unit_weight,low_threshold,active&order=name.asc','Potwierdzenie brakujących produktów dla zakupów');
+  remoteProductById=new Map(remoteProducts.map(p=>[String(p.id),p]));remoteProductByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[normalizeProductCn(p.cn_code),p]));
+  const stillMissing=missingPurchaseCodes.filter(cn=>!remoteProductByCn.has(normalizeProductCn(cn)));
+  if(stillMissing.length)throw new Error('Nie udało się potwierdzić kartotek w Supabase: CN '+stillMissing.join(', ')+'. Dokumenty zakupowe i ruchy magazynowe nie zostały wysłane.');
+ }
  const localForRemoteProduct=new Map();
- for(const rp of remoteProducts){let p=localProductById.get(rp.id)||localProductByCn.get(String(rp.cn_code||''));if(!p){p={id:rp.id,cnId:rp.cn_code||('REMOTE-'+String(rp.id).slice(0,8)),name:rp.name||'Produkt z Supabase',brand:rp.manufacturer||'Nieznany',category:rp.material||'Inny',color:rp.color||'',stock:0,unitWeight:1000,unitCost:Number(rp.purchase_price_gross)||Number(rp.purchase_price_net)||0,retailPrice:Number(rp.sale_price)||0,lowThreshold:1,image:'',createdAt:new Date().toISOString()};data.products.push(p);localProductById.set(p.id,p);localProductByCn.set(String(p.cnId),p);}else{if(!p.id)p.id=rp.id;if(!p.cnId&&rp.cn_code)p.cnId=rp.cn_code;}
+ for(const rp of remoteProducts){let p=localProductById.get(String(rp.id))||localProductByCn.get(normalizeProductCn(rp.cn_code||''));if(!p){p={id:rp.id,cnId:rp.cn_code||('REMOTE-'+String(rp.id).slice(0,8)),name:rp.name||'Produkt z Supabase',brand:rp.manufacturer||'Nieznany',category:rp.material||'Inny',color:rp.color||'',stock:0,unitWeight:1000,unitCost:Number(rp.purchase_price_gross)||Number(rp.purchase_price_net)||0,retailPrice:Number(rp.sale_price)||0,lowThreshold:1,image:'',createdAt:new Date().toISOString()};data.products.push(p);localProductById.set(p.id,p);localProductByCn.set(normalizeProductCn(p.cnId),p);}else{if(!p.id)p.id=rp.id;if(!p.cnId&&rp.cn_code)p.cnId=rp.cn_code;}
   localForRemoteProduct.set(rp.id,p);
  }
  const remoteDocs=await ctx.getAll('purchase_documents?select=id,supplier_id,document_number,document_date,currency,total_net,total_gross,shipping_cost,notes,created_at,updated_at&order=document_date.asc','Odczyt dokumentów zakupowych');
@@ -1562,7 +1607,7 @@ async function syncPurchasesToCloud(ctx,remoteSuppliers){
  const suppliersById=new Map(remoteSuppliers.map(s=>[s.id,s]));
  const productIdByCn=new Map();for(const [cn,rp] of remoteProductByCn)productIdByCn.set(cn,rp.id);
  const supplierForDoc=(doc)=>{const local=(data.suppliers||[]).find(s=>(String(s.nip||'').trim()&&String(s.nip||'').trim()===String(doc.nip||'').trim())||String(s.name||'').trim().toLocaleLowerCase('pl-PL')===String(doc.supplierName||'').trim().toLocaleLowerCase('pl-PL'));if(!local)throw new Error('Nie znaleziono dostawcy „'+(doc.supplierName||'')+'” w tabeli suppliers.');return local};
- const localToRemoteQty=(doc)=>{const map={};for(const item of doc.items||[]){const rp=remoteProductByCn.get(String(item.cn||''));if(!rp)throw new Error('Produkt o CN '+item.cn+' nie istnieje w katalogu Supabase.');map[rp.id]=(map[rp.id]||0)+(Number(item.qty)||0)}return map};
+ const localToRemoteQty=(doc)=>{const map={};for(const item of doc.items||[]){const rp=remoteProductByCn.get(normalizeProductCn(item.cn));if(!rp)throw new Error('Produkt o CN '+item.cn+' nie istnieje w katalogu Supabase.');map[rp.id]=(map[rp.id]||0)+(Number(item.qty)||0)}return map};
  const makeLocalDoc=(remote)=>{const supplier=suppliersById.get(remote.supplier_id)||{};const items=(remoteItemsByDoc.get(remote.id)||[]).map(ri=>{const p=localForRemoteProduct.get(ri.product_id)||remoteProductById.get(ri.product_id)||{},snap=ri.item_snapshot&&typeof ri.item_snapshot==='object'?ri.item_snapshot:{};const localP=localForRemoteProduct.get(ri.product_id);return{id:ri.id,cn:snap.cn||p.cn_code||localP?.cnId||'',name:snap.name||p.name||localP?.name||'Produkt',category:snap.category||p.material||localP?.category||'Inny',color:snap.color||p.color||localP?.color||'',qty:Number(ri.quantity)||0,weight:Number(snap.weight)||localP?.unitWeight||1000,cost:Number(ri.unit_price_gross??ri.unit_price_net)||0,retail:Number(snap.retail)||localP?.retailPrice||Number(p.sale_price)||0,image:snap.image||localP?.image||''}});return{id:remote.id,supplierName:supplier.name||'Nieznany dostawca',nip:supplier.tax_id||'',number:remote.document_number||'',purchaseDate:remote.document_date||dateNow(),items,shipping:Number(remote.shipping_cost)||0,notes:remote.notes||'',grossTotal:Number(remote.total_gross)||0,created:remote.created_at||remote.updated_at||new Date().toISOString(),updatedAt:remote.updated_at||remote.created_at||new Date().toISOString()};};
  const ensureBaseline=(doc)=>{data.sync.purchaseStockApplied=data.sync.purchaseStockApplied||{};if(!Object.prototype.hasOwnProperty.call(data.sync.purchaseStockApplied,doc.id))data.sync.purchaseStockApplied[doc.id]=localPurchaseQtyMap(doc)};
  // Process local permanent deletions first. Ledger rows are immutable, so removal is compensated by a new negative correction.
@@ -1574,11 +1619,11 @@ async function syncPurchasesToCloud(ctx,remoteSuppliers){
  for(const remote of remoteDocsById.values()){
   const local=localById.get(remote.id);if(!local)continue;ensureBaseline(local);
   const remoteTime=Date.parse(remote.updated_at||remote.created_at||'')||0,localTime=purchaseRemoteTime(local);
-  if(remoteTime>localTime){const imported=makeLocalDoc(remote),target={};for(const item of imported.items){const p=localProductByCn.get(String(item.cn));if(p)target[p.id]=(target[p.id]||0)+(Number(item.qty)||0)}adjustLocalPurchaseSnapshot(remote.id,target,'Nowsza wersja dokumentu pobrana z Supabase');const idx=data.invoices.findIndex(d=>d.id===remote.id);if(idx>=0)data.invoices[idx]=imported;localById.set(remote.id,imported);skipPush.add(remote.id);if(!(data.sync.purchaseCloudSeen||[]).includes(remote.id))data.sync.purchaseCloudSeen.push(remote.id);localChanged=true;}
+  if(remoteTime>localTime){const imported=makeLocalDoc(remote),target={};for(const item of imported.items){const p=localProductByCn.get(normalizeProductCn(item.cn));if(p)target[p.id]=(target[p.id]||0)+(Number(item.qty)||0)}adjustLocalPurchaseSnapshot(remote.id,target,'Nowsza wersja dokumentu pobrana z Supabase');const idx=data.invoices.findIndex(d=>d.id===remote.id);if(idx>=0)data.invoices[idx]=imported;localById.set(remote.id,imported);skipPush.add(remote.id);if(!(data.sync.purchaseCloudSeen||[]).includes(remote.id))data.sync.purchaseCloudSeen.push(remote.id);localChanged=true;}
  }
  // Push local documents (unless Supabase has a later revision).
  for(const doc of [...data.invoices]){if(skipPush.has(doc.id))continue;const remote=remoteDocsById.get(doc.id);if(!remote&&(data.sync.purchaseCloudSeen||[]).includes(doc.id)){ensureBaseline(doc);adjustLocalPurchaseSnapshot(doc.id,{},'Dokument zakupu usunięty z Supabase');data.invoices=data.invoices.filter(x=>x.id!==doc.id);delete data.sync.purchaseStockApplied[doc.id];data.sync.purchaseCloudSeen=data.sync.purchaseCloudSeen.filter(id=>id!==doc.id);localChanged=true;continue;}ensureBaseline(doc);const supplier=supplierForDoc(doc);const updatedAt=doc.updatedAt||doc.created||new Date().toISOString();doc.updatedAt=updatedAt;
-  const localRows=(doc.items||[]).map(item=>{const rp=remoteProductByCn.get(String(item.cn||''));if(!rp)throw new Error('Produkt CN '+item.cn+' nie został odnaleziony w katalogu Supabase.');const qty=Number(item.qty)||0;if(!Number.isInteger(qty))throw new Error('Baza Supabase wymaga całkowitej liczby sztuk dla zakupu. CN '+item.cn+' ma ilość '+qty+'. Nie zaokrąglam tej wartości.');return{id:item.id,document_id:doc.id,product_id:rp.id,quantity:qty,unit_price_net:Number(item.cost)||0,unit_price_gross:Number(item.cost)||0,item_snapshot:purchaseItemSnapshot(item)}});
+  const localRows=(doc.items||[]).map(item=>{const rp=remoteProductByCn.get(normalizeProductCn(item.cn));if(!rp)throw new Error('Produkt CN '+item.cn+' nie został odnaleziony w katalogu Supabase. Sprawdź, czy kod istnieje w lokalnym katalogu oraz czy katalog został potwierdzony w Supabase.');const qty=Number(item.qty)||0;if(!Number.isInteger(qty))throw new Error('Baza Supabase wymaga całkowitej liczby sztuk dla zakupu. CN '+item.cn+' ma ilość '+qty+'. Nie zaokrąglam tej wartości.');return{id:item.id,document_id:doc.id,product_id:rp.id,quantity:qty,unit_price_net:Number(item.cost)||0,unit_price_gross:Number(item.cost)||0,item_snapshot:purchaseItemSnapshot(item)}});
   const subtotal=purchaseRowsTotals(doc.items||[]),docRow={id:doc.id,supplier_id:supplier.id,document_number:String(doc.number||doc.id),document_date:/^\d{4}-\d{2}-\d{2}$/.test(String(doc.purchaseDate||''))?doc.purchaseDate:dateNow(),currency:'PLN',total_net:subtotal,total_gross:Number(doc.grossTotal)||subtotal+(Number(doc.shipping)||0),shipping_cost:Number(doc.shipping)||0,notes:doc.notes||null,created_at:doc.created||updatedAt,updated_at:updatedAt};
   await ctx.postRows('purchase_documents',[docRow]);
   const currentRemoteItems=remoteItemsByDoc.get(doc.id)||[],keepIds=new Set(localRows.map(r=>r.id));for(const ri of currentRemoteItems)if(!keepIds.has(ri.id))await ctx.deleteBy('purchase_items','id',ri.id);
@@ -1589,7 +1634,7 @@ async function syncPurchasesToCloud(ctx,remoteSuppliers){
  // Pull remote-only documents and detect deletions performed on another device.
  const activeRemoteDocs=await ctx.getAll('purchase_documents?select=id,supplier_id,document_number,document_date,currency,total_net,total_gross,shipping_cost,notes,created_at,updated_at&order=document_date.asc','Końcowy odczyt dokumentów zakupowych');
  const activeRemoteIds=new Set(activeRemoteDocs.map(d=>d.id));
- for(const remote of activeRemoteDocs){if(localById.has(remote.id)&&!skipPush.has(remote.id))continue;const imported=makeLocalDoc(remote);const existingIndex=data.invoices.findIndex(d=>d.id===remote.id);if(existingIndex<0){const target={};for(const item of imported.items){const p=localProductByCn.get(String(item.cn));if(p)target[p.id]=(target[p.id]||0)+(Number(item.qty)||0)}adjustLocalPurchaseSnapshot(remote.id,target,'Zakup pobrany z Supabase');data.invoices.push(imported);localById.set(remote.id,imported);if(!(data.sync.purchaseCloudSeen||[]).includes(remote.id))data.sync.purchaseCloudSeen.push(remote.id);localChanged=true;}}
+ for(const remote of activeRemoteDocs){if(localById.has(remote.id)&&!skipPush.has(remote.id))continue;const imported=makeLocalDoc(remote);const existingIndex=data.invoices.findIndex(d=>d.id===remote.id);if(existingIndex<0){const target={};for(const item of imported.items){const p=localProductByCn.get(normalizeProductCn(item.cn));if(p)target[p.id]=(target[p.id]||0)+(Number(item.qty)||0)}adjustLocalPurchaseSnapshot(remote.id,target,'Zakup pobrany z Supabase');data.invoices.push(imported);localById.set(remote.id,imported);if(!(data.sync.purchaseCloudSeen||[]).includes(remote.id))data.sync.purchaseCloudSeen.push(remote.id);localChanged=true;}}
  for(const [docId,applied] of Object.entries(data.sync.purchaseStockApplied||{})){if(activeRemoteIds.has(docId)||deleted.includes(docId))continue;const local=data.invoices.find(d=>d.id===docId);if(!local)continue;adjustLocalPurchaseSnapshot(docId,{},'Dokument zakupu usunięty z Supabase');data.invoices=data.invoices.filter(d=>d.id!==docId);delete data.sync.purchaseStockApplied[docId];localChanged=true;}
  data.invoices.sort((a,b)=>String(a.purchaseDate||a.created||'').localeCompare(String(b.purchaseDate||b.created||'')));
  if(localChanged)save();else localStorage.setItem(KEY,JSON.stringify(data));
@@ -1669,10 +1714,10 @@ async function storageDelete(ctx,path){
 async function syncProductImages(ctx,remoteProducts){
  const ownerId=await cloudOwnerId(ctx),remoteMeta=await ctx.getAll('product_images?select=id,owner_id,product_id,storage_path,file_name,file_hash,updated_at&order=updated_at.desc','Odczyt metadanych zdjęć');
  const byRemoteProduct=new Map();for(const row of remoteMeta)if(!byRemoteProduct.has(row.product_id))byRemoteProduct.set(row.product_id,row);
- const remoteById=new Map(remoteProducts.map(p=>[String(p.id),p])),remoteByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[String(p.cn_code),p]));
+ const remoteById=new Map(remoteProducts.map(p=>[String(p.id),p])),remoteByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[normalizeProductCn(p.cn_code),p]));
  let changed=false,uploaded=0,downloaded=0,removed=0;
  for(const p of data.products){
-  const remoteProduct=remoteById.get(String(p.id))||(p.cnId?remoteByCn.get(String(p.cnId)):null);if(!remoteProduct)continue;
+  const remoteProduct=remoteById.get(String(p.id))||(p.cnId?remoteByCn.get(normalizeProductCn(p.cnId)):null);if(!remoteProduct)continue;
   const record=byRemoteProduct.get(remoteProduct.id);
   if(p.imageDeleted){
    if(record){await storageDelete(ctx,record.storage_path);await ctx.deleteBy('product_images','id',record.id);byRemoteProduct.delete(remoteProduct.id);removed++;}
@@ -1712,11 +1757,11 @@ async function syncProductImages(ctx,remoteProducts){
 }
 function isPurchaseHistoryAction(action){return /zakup/i.test(String(action||''));}
 async function syncInventoryHistory(ctx,remoteProducts,localStockAtStart){
- const remoteByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[String(p.cn_code),p])),remoteById=new Map(remoteProducts.map(p=>[String(p.id),p]));
+ const remoteByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[normalizeProductCn(p.cn_code),p])),remoteById=new Map(remoteProducts.map(p=>[String(p.id),p]));
  const historyRows=[],stockRows=[],historyIdByStockOpId=new Map();let idsChanged=false;
  for(const h of data.history){
   if(!h.id||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(h.id))){h.id=crypto.randomUUID();idsChanged=true;}
-  const action=String(h.action||'Operacja'),cn=String(h.cnId||''),localProduct=data.products.find(p=>String(p.cnId||'')===cn)||data.products.find(p=>String(p.name||'')===String(h.productName||'')),remoteProduct=(localProduct&&remoteById.get(String(localProduct.id)))||remoteByCn.get(cn);
+  const action=String(h.action||'Operacja'),cn=String(h.cnId||''),localProduct=data.products.find(p=>normalizeProductCn(p.cnId||'')===normalizeProductCn(cn))||data.products.find(p=>String(p.name||'')===String(h.productName||'')),remoteProduct=(localProduct&&remoteById.get(String(localProduct.id)))||remoteByCn.get(normalizeProductCn(cn));
   if(isPurchaseHistoryAction(action))continue;
   const validDocumentId=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(h.documentId||''))?String(h.documentId):null;const details={fsm_source:'fsm-pwa-v1',productName:String(h.productName||localProduct?.name||'—'),cnId:cn,qty:Number(h.qty)||0,note:String(h.note||''),documentId:validDocumentId,deviceId:String(data.sync.deviceId||deviceId)};
   historyRows.push({id:h.id,entity_type:'product',entity_id:remoteProduct?.id||null,action,details,created_at:h.date||new Date().toISOString()});
@@ -1766,7 +1811,7 @@ async function syncInventoryHistory(ctx,remoteProducts,localStockAtStart){
  const cloudQty=new Map(balance.map(row=>[String(row.product_id),Number(row.stock_quantity)||0]));
  const bootstrap=[];
  for(const p of data.products){
-  const rp=remoteById.get(String(p.id))||remoteByCn.get(String(p.cnId||''));if(!rp||productsWithLedger.has(String(rp.id)))continue;
+  const rp=remoteById.get(String(p.id))||remoteByCn.get(normalizeProductCn(p.cnId||''));if(!rp||productsWithLedger.has(String(rp.id)))continue;
   const current=Number(p.stock)||0,unsynced=pendingNet.get(String(rp.id))||0,opening=current-unsynced,remote=cloudQty.get(String(rp.id))||0,delta=opening-remote;
   if(delta<=0.00001)continue;
   if(!Number.isInteger(delta))throw new Error('Stan początkowy produktu '+p.name+' wynosi '+delta+' szt. Supabase wymaga całkowitych ilości.');
@@ -1806,6 +1851,8 @@ async function syncInventoryHistory(ctx,remoteProducts,localStockAtStart){
 }
 async function syncSalesToCloud(ctx){
  const ownerId=await cloudOwnerId(ctx),isUuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v||''));
+ const remoteProducts=await ctx.getAll('products?select=id,name,cn_code,item_type,unit_weight,sale_price,purchase_price_gross,purchase_price_net&order=name.asc','Odczyt katalogu produktów przed synchronizacją sprzedaży');
+ const remoteProductById=new Map(remoteProducts.map(p=>[String(p.id),p])),remoteProductByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[normalizeProductCn(p.cn_code),p]));
  const docSelect='id,owner_id,document_type,document_number,document_series,document_date,sale_date,place,customer_name,customer_nip,no_customer,recipient_name,bank_account,calculated_from,currency,payment_method,payment_due_date,payment_due_days,amount_paid,amount_due,payment_date,notes,gross_total,total_net,total_gross,is_deleted,created_at,updated_at';
  const itemSelect='id,owner_id,document_id,product_id,line_no,quantity,unit,unit_price_net,unit_price_gross,discount_percent,gtu,pkwiu,item_snapshot,created_at';
  let remoteDocs=await ctx.getAll('sales_documents?select='+docSelect+'&order=updated_at.asc','Odczyt dokumentów sprzedaży');
@@ -1823,8 +1870,8 @@ async function syncSalesToCloud(ctx){
   if(remote&&remoteUpdated>localUpdated)continue;
   const createdAt=first.createdAt||first.date||new Date(localUpdated).toISOString(),updatedAt=first.updatedAt||new Date(localUpdated).toISOString(),grossTotal=doc.items.reduce((sum,item)=>sum+(Number(item.grossLineValue)||Number(item.qty||0)*Number(item.pricePerUnit||0)*(1-(Number(item.discountPercent)||0)/100)),0);
   const header={id:docId,owner_id:ownerId,document_type:doc.type==='legacy'?'receipt':doc.type,document_number:doc.number||'',document_series:doc.series||'',document_date:doc.date||dateNow(),sale_date:first.saleDate||doc.date||dateNow(),place:first.place||doc.place||'',customer_name:doc.customer||'',customer_nip:first.customerNip||'',no_customer:!!first.noCustomer,recipient_name:doc.recipient||'',bank_account:first.bankAccount||'',calculated_from:first.calculatedFrom||'Brutto',currency:first.currency||'PLN',payment_method:doc.paymentMethod||'',payment_due_date:doc.paymentDueDate||null,payment_due_days:first.paymentDueDays==null?null:Number(first.paymentDueDays),amount_paid:Number(doc.amountPaid)||0,amount_due:Number(doc.amountDue)||0,payment_date:doc.paymentDate||null,notes:doc.notes||'',gross_total:doc.type==='rw'?0:grossTotal,total_net:doc.type==='rw'?0:grossTotal,total_gross:doc.type==='rw'?0:grossTotal,is_deleted:false,created_at:createdAt,updated_at:updatedAt};
+  const rows=doc.items.map((item,index)=>{const product=data.products.find(p=>String(p.id)===String(item.productId));const cn=item.productCN||product?.cnId||'',remoteProduct=remoteProductById.get(String(item.productId))||remoteProductByCn.get(normalizeProductCn(cn));if(!remoteProduct)throw new Error('Produkt „'+String(item.productName||product?.name||cn||'—')+'” (CN '+String(cn||'brak')+') nie ma potwierdzonego odpowiednika w katalogu Supabase. Nie wysłano pozycji dokumentu.');const price=Number(item.pricePerUnit)||0,qty=Number(item.qty)||0,discount=Number(item.discountPercent)||0,snapshot={productName:item.productName||product?.name||remoteProduct.name||'Produkt',productCN:cn||remoteProduct.cn_code||'',itemType:item.itemType||product?.itemType||remoteProduct.item_type||'filament',unitWeight:Number(item.unitWeight??product?.unitWeight??remoteProduct.unit_weight??1000),costAtSale:Number(item.costAtSale)||0};return{id:item.id,owner_id:ownerId,document_id:docId,product_id:remoteProduct.id,line_no:index+1,quantity:qty,unit:item.unit||'szt.',unit_price_net:price,unit_price_gross:price,discount_percent:discount,gtu:item.gtu||'brak',pkwiu:item.pkwiu||cn||'',item_snapshot:snapshot,created_at:item.createdAt||createdAt}});
   await ctx.postRows('sales_documents',[header]);pushedDocs++;
-  const rows=doc.items.map((item,index)=>{const product=data.products.find(p=>String(p.id)===String(item.productId));const price=Number(item.pricePerUnit)||0,qty=Number(item.qty)||0,discount=Number(item.discountPercent)||0,snapshot={productName:item.productName||product?.name||'Produkt',productCN:item.productCN||product?.cnId||'',itemType:item.itemType||product?.itemType||'filament',unitWeight:Number(item.unitWeight??product?.unitWeight??1000),costAtSale:Number(item.costAtSale)||0};return{id:item.id,owner_id:ownerId,document_id:docId,product_id:item.productId,line_no:index+1,quantity:qty,unit:item.unit||'szt.',unit_price_net:price,unit_price_gross:price,discount_percent:discount,gtu:item.gtu||'brak',pkwiu:item.pkwiu||item.productCN||'',item_snapshot:snapshot,created_at:item.createdAt||createdAt}});
   if(rows.length){await ctx.postRows('sales_items',rows);pushedItems+=rows.length;}
   // Remove obsolete lines left by an earlier version of this document.
   const keepIds=rows.map(r=>r.id);let staleQuery='document_id=eq.'+encodeURIComponent(docId);if(keepIds.length)staleQuery+='&id=not.in.('+keepIds.join(',')+')';else staleQuery+='&id=not.is.null';
@@ -1858,8 +1905,8 @@ async function syncSalesToCloud(ctx){
 async function syncStockBalance(ctx,remoteProducts,localStockAtStart){
  const ownerId=await cloudOwnerId(ctx),balance=await ctx.getAll('stock_balance?select=owner_id,product_id,stock_quantity&owner_id=eq.'+encodeURIComponent(ownerId),'Odczyt aktualnych stanów magazynowych');
  const finalByProduct=new Map(balance.map(r=>[String(r.product_id),Number(r.stock_quantity)||0]));
- const remoteByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[String(p.cn_code),p])),remoteById=new Map(remoteProducts.map(p=>[String(p.id),p]));
- for(const p of data.products){const rp=remoteById.get(String(p.id))||remoteByCn.get(String(p.cnId||''));if(!rp)continue;p.stock=finalByProduct.get(String(rp.id))||0;}
+ const remoteByCn=new Map(remoteProducts.filter(p=>p.cn_code).map(p=>[normalizeProductCn(p.cn_code),p])),remoteById=new Map(remoteProducts.map(p=>[String(p.id),p]));
+ for(const p of data.products){const rp=remoteById.get(String(p.id))||remoteByCn.get(normalizeProductCn(p.cnId||''));if(!rp)continue;p.stock=finalByProduct.get(String(rp.id))||0;}
  return{products:data.products.length,stockRows:balance.length};
 }
 async function syncAllToCloud({automatic=false}={}){
@@ -1874,7 +1921,7 @@ async function syncAllToCloud({automatic=false}={}){
  const stage=async(key,label,fn,requires=[])=>{if(!requires.every(r=>stages[r])){errors.push(label+': pominięto, ponieważ nie zakończył się etap zależny.');return false;}try{if(status)status.textContent='Synchronizacja: '+label+'…';await fn();stages[key]=true;return true;}catch(e){errors.push(label+': '+(e?.message||String(e)));if(status)status.textContent='Błąd '+label+': '+(e?.message||String(e));return false;}};
  try{ctx=await cloudApiContext();}catch(e){errors.push('Połączenie: '+e.message);}
  if(ctx){
-  await stage('catalog','katalog produktów i usług',async()=>{const result=await syncCatalogToCloud(ctx);remoteProducts=result.remoteProducts;if(!remoteProducts?.length&&data.products.some(p=>p.itemType!=='service'))throw new Error('Zdalny katalog zwrócił pustą listę mimo lokalnych produktów.');});
+  await stage('catalog','katalog produktów i usług',async()=>{const result=await syncCatalogToCloud(ctx);remoteProducts=result.remoteProducts;if(result.repairedMissing&&status)status.textContent='Katalog: przywrócono brakujące produkty ('+result.repairedMissing+').';if(!remoteProducts?.length&&data.products.some(p=>p.itemType!=='service'))throw new Error('Zdalny katalog zwrócił pustą listę mimo lokalnych produktów.');});
   let remoteSuppliers=[];await stage('suppliers','dostawcy',async()=>{remoteSuppliers=await syncSuppliersToCloud(ctx);},['catalog']);
   await stage('purchases','zakupy i przyjęcia',async()=>{await syncPurchasesToCloud(ctx,remoteSuppliers);},['catalog','suppliers']);
   await stage('images','zdjęcia produktów',async()=>{await syncProductImages(ctx,remoteProducts);},['catalog']);
